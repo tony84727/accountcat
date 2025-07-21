@@ -1,4 +1,4 @@
-import './App.css';
+import "normalize.css"
 
 const App = () => {
   return (
