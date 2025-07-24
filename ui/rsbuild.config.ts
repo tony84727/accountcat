@@ -21,4 +21,9 @@ export default defineConfig({
 	source: {
 		define: publicVars,
 	},
+	server: {
+		proxy: {
+			'/api': 'http://localhost:3000'
+		}
+	}
 });
