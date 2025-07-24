@@ -1,5 +1,14 @@
 import styles from "./Nav.module.scss";
 
-export default function () {
-	return <nav className={styles.container}>AccountCat</nav>;
+interface Props {
+	username?: string;
+}
+
+export default function (props: Props) {
+	return (
+		<nav className={styles.container}>
+			AccountCat
+			{props.username && <span>Hello, {props.username}</span>}
+		</nav>
+	);
 }

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-interface Response {
+export interface Response {
 	credential: string;
 }
 interface Props {
