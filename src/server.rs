@@ -1,13 +1,22 @@
 use std::sync::Arc;
 
-use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
+use axum::{
+    Json, Router,
+    extract::State,
+    http::StatusCode,
+    response::{IntoResponse, Redirect, Response},
+    routing::{get, post},
+};
 use serde::{Deserialize, Serialize};
 use tower_http::services::ServeDir;
+use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
 use crate::{
     config,
-    jwtutils::{self, JwtVerifier},
+    jwtutils::{self, Claims, JwtVerifier},
 };
+
+const SESSION_KEY_CLAIMS: &str = "claims";
 
 struct ServerState {
     jwt_verify: JwtVerifier,
@@ -19,14 +28,26 @@ struct User {
 }
 
 async fn init_login(
+    session: Session,
     State(state): State<Arc<ServerState>>,
     token: String,
-) -> Result<Json<User>, StatusCode> {
+) -> Result<Response, StatusCode> {
+    let current_subject = session
+        .get::<Claims>(SESSION_KEY_CLAIMS)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    if current_subject.is_some() {
+        return Ok(Redirect::to("/").into_response());
+    }
     let claims = state
         .jwt_verify
         .verify(&token)
         .map_err(|_| StatusCode::BAD_REQUEST)?;
-    Ok(Json(User { name: claims.name }))
+    session
+        .insert(SESSION_KEY_CLAIMS, &claims)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
+    Ok(Json(User { name: claims.name }).into_response())
 }
 
 async fn init_state() -> ServerState {
@@ -39,12 +60,24 @@ async fn init_state() -> ServerState {
     }
 }
 
+async fn get_name(session: Session) -> Result<String, StatusCode> {
+    Ok(session
+        .get::<Claims>(SESSION_KEY_CLAIMS)
+        .await
+        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+        .map(|x| x.name)
+        .unwrap_or_default())
+}
 pub async fn main() {
     tracing_subscriber::fmt::init();
     let serve_ui = ServeDir::new("ui/dist");
+    let session_store = MemoryStore::default();
+    let session_layer = SessionManagerLayer::new(session_store);
     let api_router = Router::new()
         .route("/login", post(init_login))
-        .with_state(Arc::new(init_state().await));
+        .route("/name", get(get_name))
+        .with_state(Arc::new(init_state().await))
+        .layer(session_layer);
 
     let app = Router::new()
         .nest("/api", api_router)
