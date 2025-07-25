@@ -13,7 +13,7 @@ declare global {
 	}
 }
 
-export default function (props: Props) {
+export default function GoogleSignIn(props: Props) {
 	useEffect(() => {
 		window.onGoogleLogin = (response) => {
 			props.loginCallback(response);

@@ -4,7 +4,7 @@ interface Props {
 	username?: string;
 }
 
-export default function (props: Props) {
+export default function Nav(props: Props) {
 	return (
 		<nav className={styles.container}>
 			AccountCat
