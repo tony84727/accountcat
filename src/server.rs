@@ -4,7 +4,7 @@ use axum::{
     Json, Router,
     extract::State,
     http::StatusCode,
-    response::{IntoResponse, Redirect, Response},
+    response::{IntoResponse, Response},
     routing::{get, post},
 };
 use serde::{Deserialize, Serialize};
@@ -37,7 +37,7 @@ async fn init_login(
         .await
         .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
     if current_subject.is_some() {
-        return Ok(Redirect::to("/").into_response());
+        return Ok(StatusCode::OK.into_response());
     }
     let claims = state
         .jwt_verify
@@ -60,13 +60,15 @@ async fn init_state() -> ServerState {
     }
 }
 
-async fn get_name(session: Session) -> Result<String, StatusCode> {
-    Ok(session
-        .get::<Claims>(SESSION_KEY_CLAIMS)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-        .map(|x| x.name)
-        .unwrap_or_default())
+async fn get_name(session: Session) -> Result<Json<String>, StatusCode> {
+    Ok(Json(
+        session
+            .get::<Claims>(SESSION_KEY_CLAIMS)
+            .await
+            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
+            .map(|x| x.name)
+            .unwrap_or_default(),
+    ))
 }
 pub async fn main() {
     tracing_subscriber::fmt::init();

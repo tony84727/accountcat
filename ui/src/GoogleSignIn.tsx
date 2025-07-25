@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 export interface Response {
 	credential: string;
@@ -14,22 +14,38 @@ declare global {
 }
 
 export default function GoogleSignIn(props: Props) {
+	const button = useRef(null);
 	useEffect(() => {
-		window.onGoogleLogin = (response) => {
-			props.loginCallback(response);
+		const clientScriptTag = document.createElement("script");
+		clientScriptTag.src = "https://accounts.google.com/gsi/client";
+		clientScriptTag.async = true;
+		clientScriptTag.onload = () => {
+			google.accounts.id.initialize({
+				client_id: import.meta.env.PUBLIC_GOOGLE_CLIENT_ID,
+				callback: props.loginCallback,
+			});
+			if (button.current) {
+				google.accounts.id.renderButton(button.current, {
+					theme: "outline",
+					size: "medium",
+					type: "standard",
+				});
+			}
+
+			google.accounts.id.prompt();
+			window.onGoogleLogin = (response) => {
+				props.loginCallback(response);
+			};
 		};
+		document.body.appendChild(clientScriptTag);
+
 		return () => {
+			if (window.google) {
+				google.accounts.id.cancel();
+			}
+			clientScriptTag.remove();
 			delete window.onGoogleLogin;
 		};
 	}, [props.loginCallback]);
-	return (
-		<div
-			id="g_id_onload"
-			data-client_id={import.meta.env.PUBLIC_GOOGLE_CLIENT_ID}
-			data-context="use"
-			data-callback="onGoogleLogin"
-			data-nonce=""
-			data-itp_support="true"
-		></div>
-	);
+	return;
 }
