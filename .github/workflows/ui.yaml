@@ -1,0 +1,25 @@
+name: Ui
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+    - name: Install node modules
+      working-directory: ui
+      run: npm install
+    - name: Lint by biome
+      working-directory: ui
+      run: npx biome ci
+    - name: Build
+      working-directory: ui
+      run: npm run build
+
