@@ -6,12 +6,18 @@ edition = "2024"
 [dependencies]
 axum = "0.8.4"
 jsonwebtoken = "9.3.1"
+prost = "0.13.5"
+prost-types = "0.13.5"
 reqwest = { version = "0.12.22", features = ["json"] }
 serde = { version = "1.0.219", features = ["derive"] }
 tokio = { version = "1.46.1", features = ["full"] }
 toml = "0.9.2"
+tonic = "0.13.1"
 tonic-web = "0.13.1"
 tower-http = { version = "0.6.6", features = ["fs"] }
 tower-sessions = "0.14.0"
 tracing = "0.1.41"
 tracing-subscriber = "0.3.19"
+
+[build-dependencies]
+tonic-build = "0.13.1"
