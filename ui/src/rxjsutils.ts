@@ -15,7 +15,7 @@ export function unwrapResponse<T>() {
 	return map(({ response }: AjaxResponse<T>) => response);
 }
 
-export function useSubject<T = undefined>(): [
+export function withSubject<T = undefined>(): [
 	Observable<T>,
 	(event: T) => void,
 ] {

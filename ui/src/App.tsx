@@ -4,9 +4,9 @@ import { ajax } from "rxjs/ajax";
 import { map, mergeWith, share, startWith, switchMap } from "rxjs/operators";
 import type { Response } from "./GoogleSignIn";
 import Nav from "./Nav";
-import { unwrapResponse, useObservable, useSubject } from "./rxjsutils";
+import { unwrapResponse, useObservable, withSubject } from "./rxjsutils";
 
-const [onLogin$, onLogin] = useSubject<Response>();
+const [onLogin$, onLogin] = withSubject<Response>();
 const username$ = defer(() => ajax.get<string>("/api/name")).pipe(
 	unwrapResponse(),
 	mergeWith(
