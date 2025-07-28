@@ -8,6 +8,18 @@ Install the dependencies:
 npm install
 ```
 
+### Generate proto files
+
+This project uses gRPC-Web. Before building the UI you need
+`protoc`, `protoc-gen-js` and `protoc-gen-grpc_web` available in your `PATH`.
+After installing them run:
+
+```bash
+make proto
+```
+
+to generate the TypeScript files under `src/proto`.
+
 ## Get started
 
 Start the dev server, and the app will be available at [http://localhost:3000](http://localhost:3000).
