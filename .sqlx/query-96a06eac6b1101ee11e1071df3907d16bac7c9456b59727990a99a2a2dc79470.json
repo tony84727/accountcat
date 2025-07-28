@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into users (google_sub) values ($1) on conflict (google_sub) do nothing;",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "96a06eac6b1101ee11e1071df3907d16bac7c9456b59727990a99a2a2dc79470"
+}
