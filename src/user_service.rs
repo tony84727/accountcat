@@ -43,6 +43,13 @@ impl crate::idl::user_server::User for UserApi {
             .jwt_verify
             .verify(&request.get_ref().token)
             .map_err(|_| tonic::Status::unauthenticated("invalid token"))?;
+        sqlx::query!(
+            "insert into users (google_sub) values ($1) on conflict (google_sub) do nothing;",
+            claims.sub
+        )
+        .execute(&self.state.database)
+        .await
+        .map_err(|_| tonic::Status::internal(String::new()))?;
         session
             .insert(SESSION_KEY_CLAIMS, &claims)
             .await
