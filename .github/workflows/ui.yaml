@@ -16,10 +16,15 @@ jobs:
     - name: Install node modules
       working-directory: ui
       run: npm install
+    - name: Install Protoc
+      uses: arduino/setup-protoc@v3
+    - name: Generate gRPC-web files
+      working-directory: ui
+      run: make proto
     - name: Lint by biome
       working-directory: ui
       run: npx biome ci
     - name: Build
       working-directory: ui
-      run: npm run build
+      run: make
 
