@@ -11,7 +11,7 @@ use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 use crate::{
     config::{self, Config},
-    idl::user_server::UserServer,
+    idl::user::user_server::UserServer,
     jwtutils::{self, JwtVerifier},
     user_service,
 };

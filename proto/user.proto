@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 import "google/protobuf/empty.proto";
-package accountcatidl;
+package accountcat.user;
 
 message LoginRequest { string token = 1; }
 

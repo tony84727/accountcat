@@ -1,1 +1,3 @@
-tonic::include_proto!("accountcatidl");
+pub mod user {
+    tonic::include_proto!("accountcat.user");
+}
