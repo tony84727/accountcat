@@ -11,7 +11,10 @@ npm install
 ### Generate proto files
 
 This project uses gRPC-Web. Before building the UI you need
-`protoc`, `protoc-gen-js` and `protoc-gen-grpc_web` available in your `PATH`.
+[`protoc`](https://github.com/protocolbuffers/protobuf),
+[`protoc-gen-js`](https://github.com/protocolbuffers/protobuf-javascript) and
+[`protoc-gen-grpc_web`](https://github.com/grpc/grpc-web) available in your
+`PATH`.
 After installing them run:
 
 ```bash
