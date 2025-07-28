@@ -1,18 +1,14 @@
 use std::sync::Arc;
 
-use axum::{
-    Json, Router,
-    extract::State,
-    http::StatusCode,
-    response::{IntoResponse, Response},
-    routing::{get, post},
-};
-use serde::{Deserialize, Serialize};
+use axum::Router;
+use tonic::Request;
+use tonic_web::GrpcWebLayer;
 use tower_http::services::ServeDir;
 use tower_sessions::{MemoryStore, Session, SessionManagerLayer};
 
 use crate::{
     config,
+    idl::{LoginRequest, Profile, user_server::UserServer},
     jwtutils::{self, Claims, JwtVerifier},
 };
 
@@ -20,34 +16,6 @@ const SESSION_KEY_CLAIMS: &str = "claims";
 
 struct ServerState {
     jwt_verify: JwtVerifier,
-}
-
-#[derive(Serialize, Deserialize)]
-struct User {
-    name: String,
-}
-
-async fn init_login(
-    session: Session,
-    State(state): State<Arc<ServerState>>,
-    token: String,
-) -> Result<Response, StatusCode> {
-    let current_subject = session
-        .get::<Claims>(SESSION_KEY_CLAIMS)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    if current_subject.is_some() {
-        return Ok(StatusCode::OK.into_response());
-    }
-    let claims = state
-        .jwt_verify
-        .verify(&token)
-        .map_err(|_| StatusCode::BAD_REQUEST)?;
-    session
-        .insert(SESSION_KEY_CLAIMS, &claims)
-        .await
-        .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?;
-    Ok(Json(User { name: claims.name }).into_response())
 }
 
 async fn init_state() -> ServerState {
@@ -60,29 +28,85 @@ async fn init_state() -> ServerState {
     }
 }
 
-async fn get_name(session: Session) -> Result<Json<String>, StatusCode> {
-    Ok(Json(
-        session
+struct UserApi {
+    server_status: Arc<ServerState>,
+}
+
+#[tonic::async_trait]
+impl crate::idl::user_server::User for UserApi {
+    async fn login(
+        &self,
+        request: Request<LoginRequest>,
+    ) -> tonic::Result<tonic::Response<Profile>, tonic::Status> {
+        let session: Option<&Session> = request.extensions().get();
+        let Some(session) = session else {
+            return Err(tonic::Status::internal(String::new()));
+        };
+        let current_subject = session
             .get::<Claims>(SESSION_KEY_CLAIMS)
             .await
-            .map_err(|_| StatusCode::INTERNAL_SERVER_ERROR)?
-            .map(|x| x.name)
-            .unwrap_or_default(),
-    ))
+            .map_err(|_| tonic::Status::internal(String::new()))?;
+        if let Some(subject) = current_subject {
+            return Ok(tonic::Response::new(Profile {
+                name: Some(subject.name),
+            }));
+        }
+        let claims = self
+            .server_status
+            .jwt_verify
+            .verify(&request.get_ref().token)
+            .map_err(|_| tonic::Status::unauthenticated("invalid token"))?;
+        session
+            .insert(SESSION_KEY_CLAIMS, &claims)
+            .await
+            .map_err(|_| tonic::Status::internal(String::new()))?;
+        Ok(tonic::Response::new(Profile {
+            name: Some(claims.name),
+        }))
+    }
+    async fn get_name(
+        &self,
+        request: Request<()>,
+    ) -> tonic::Result<tonic::Response<Profile>, tonic::Status> {
+        let session: Option<&Session> = request.extensions().get();
+        let Some(session) = session else {
+            return Err(tonic::Status::internal(String::new()));
+        };
+        let Some(claims) = session
+            .get::<Claims>(SESSION_KEY_CLAIMS)
+            .await
+            .map_err(|_| tonic::Status::internal(String::new()))?
+        else {
+            return Ok(tonic::Response::new(Profile::default()));
+        };
+
+        Ok(tonic::Response::new(Profile {
+            name: Some(claims.name),
+        }))
+    }
 }
+
 pub async fn main() {
     tracing_subscriber::fmt::init();
     let serve_ui = ServeDir::new("ui/dist");
     let session_store = MemoryStore::default();
     let session_layer = SessionManagerLayer::new(session_store);
-    let api_router = Router::new()
-        .route("/login", post(init_login))
-        .route("/name", get(get_name))
-        .with_state(Arc::new(init_state().await))
-        .layer(session_layer);
+    let server_state = Arc::new(init_state().await);
+    let user_api = UserServer::new(UserApi {
+        server_status: server_state.clone(),
+    });
+    let mut grpc_server_builder = tonic::service::Routes::builder();
+    grpc_server_builder.add_service(user_api);
+    let grpc_server = grpc_server_builder.routes();
 
     let app = Router::new()
-        .nest("/api", api_router)
+        .nest(
+            "/api",
+            grpc_server
+                .into_axum_router()
+                .layer(GrpcWebLayer::new())
+                .layer(session_layer),
+        )
         .fallback_service(serve_ui);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();

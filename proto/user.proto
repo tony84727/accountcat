@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+package accountcatidl;
+
+message LoginRequest { string token = 1; }
+
+message Profile { optional string name = 1; }
+
+service User {
+  rpc GetName(google.protobuf.Empty) returns (Profile) {}
+  rpc Login(LoginRequest) returns (Profile) {}
+}

@@ -1,22 +1,26 @@
 import "normalize.css";
-import { defer } from "rxjs";
-import { ajax } from "rxjs/ajax";
+import { Empty } from "google-protobuf/google/protobuf/empty_pb";
+import { defer, from } from "rxjs";
 import { map, mergeWith, share, startWith, switchMap } from "rxjs/operators";
 import type { Response } from "./GoogleSignIn";
 import Nav from "./Nav";
-import { unwrapResponse, useObservable, withSubject } from "./rxjsutils";
+import { UserClient } from "./proto/UserServiceClientPb";
+import { LoginRequest } from "./proto/user_pb";
+import { useObservable, withSubject } from "./rxjsutils";
 
+const userClient = new UserClient("/api");
 const [onLogin$, onLogin] = withSubject<Response>();
-const username$ = defer(() => ajax.get<string>("/api/name")).pipe(
-	unwrapResponse(),
+const username$ = defer(() => userClient.getName(new Empty())).pipe(
+	map((response) => response.getName()),
 	mergeWith(
 		onLogin$.pipe(
-			switchMap(({ credential }) =>
-				ajax.post<{ name: string }>("/api/login", credential).pipe(
-					unwrapResponse(),
-					map(({ name }) => name),
-				),
-			),
+			switchMap(({ credential }) => {
+				const request = new LoginRequest();
+				request.setToken(credential);
+				return from(userClient.login(request)).pipe(
+					map((response) => response.getName()),
+				);
+			}),
 		),
 	),
 	share(),
