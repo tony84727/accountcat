@@ -19,7 +19,7 @@ $(PROTO_OUT_DIR):
 PROTOC_FLAGS := -I../proto --plugin=protoc-gen-grpc-web=$(GRPC_WEB_PLUGIN)
 
 src/proto/user_pb.d.ts src/proto/UserServiceClientPb.ts: ../proto/user.proto tools/protoc-gen-grpc-web $(PROTO_OUT_DIR)
-	protoc $(PROTOC_FLAGS) --grpc-web_out=$(GRPC_WEB_OUTPUT_OPTIONS):src/proto $<
+	protoc $(PROTOC_FLAGS) --js_out=import_style=commonjs:src/proto --grpc-web_out=$(GRPC_WEB_OUTPUT_OPTIONS):src/proto $<
 
 
 .DELETE_ON_ERROR:
