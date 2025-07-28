@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+message Task {
+  string id = 1;
+  string name = 2;
+  bool completed = 3;
+  optional string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+  repeated Task children = 6;
+}
+
+message TodoList {
+  repeated Task tasks = 1;
+}
+
+message NewTask {
+  string name = 1;
+  optional string description = 2;
+  optional string parent = 3;
+}
+
+service Todolist {
+  rpc List(google.protobuf.Empty) returns (TodoList) {}
+  rpc Add(NewTask) returns (google.protobuf.Empty) {}
+}
