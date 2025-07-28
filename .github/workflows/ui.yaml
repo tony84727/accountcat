@@ -18,6 +18,8 @@ jobs:
       run: npm install
     - name: Install Protoc
       uses: arduino/setup-protoc@v3
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install protoc-gen-js
       run: npm install -g protoc-gen-js
     - name: Generate gRPC-web files
