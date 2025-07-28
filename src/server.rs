@@ -1,12 +1,16 @@
 use std::sync::Arc;
 
 use axum::Router;
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
 use tonic_web::GrpcWebLayer;
 use tower_http::services::ServeDir;
 use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 use crate::{
-    config,
+    config::{self, Config},
     idl::user_server::UserServer,
     jwtutils::{self, JwtVerifier},
     user_service,
@@ -15,16 +19,22 @@ use crate::{
 pub const SESSION_KEY_CLAIMS: &str = "claims";
 
 pub struct ServerState {
+    pub database: PgPool,
     pub jwt_verify: JwtVerifier,
 }
 
 async fn init_state() -> ServerState {
-    let server_config = config::load().expect("load server config");
-    let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, server_config.login.client_id)
+    let Config { login, database } = config::load().expect("load server config");
+    let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, login.client_id)
         .await
         .expect("init jwt verifier");
+    let connection = PgConnectOptions::from(database.unwrap_or_default());
     ServerState {
         jwt_verify: verifier,
+        database: PgPoolOptions::new()
+            .connect_with(connection)
+            .await
+            .expect("failed to connect database"),
     }
 }
 
