@@ -6,19 +6,18 @@
 		"useIgnoreFile": false
 	},
 	"files": {
-		"ignoreUnknown": false
+		"ignoreUnknown": false,
+		"includes": ["**", "!**/dist/**", "!**/src/proto/**"]
 	},
 	"formatter": {
 		"enabled": true,
-		"indentStyle": "tab",
-		"includes": ["**", "!**/dist/**"]
+		"indentStyle": "tab"
 	},
 	"linter": {
 		"enabled": true,
 		"rules": {
 			"recommended": true
-		},
-		"includes": ["**", "!**/dist/**"]
+		}
 	},
 	"javascript": {
 		"formatter": {
