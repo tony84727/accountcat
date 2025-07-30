@@ -31,10 +31,7 @@ async fn init_state() -> ServerState {
     let connection = PgConnectOptions::from(database.unwrap_or_default());
     ServerState {
         jwt_verify: verifier,
-        database: PgPoolOptions::new()
-            .connect_with(connection)
-            .await
-            .expect("failed to connect database"),
+        database: PgPoolOptions::new().connect_lazy_with(connection),
     }
 }
 
