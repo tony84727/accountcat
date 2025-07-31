@@ -1,5 +1,7 @@
 import "normalize.css";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
+import { lazy } from "react";
+import { BrowserRouter, Link, Route, Routes } from "react-router";
 import { defer, from } from "rxjs";
 import { map, mergeWith, share, startWith, switchMap } from "rxjs/operators";
 import type { Response } from "./GoogleSignIn";
@@ -7,6 +9,8 @@ import Nav from "./Nav";
 import { UserClient } from "./proto/UserServiceClientPb";
 import { LoginRequest } from "./proto/user_pb";
 import { useObservable, withSubject } from "./rxjsutils";
+
+const TodoList = lazy(() => import("./TodoList"));
 
 const userClient = new UserClient("/api");
 const [onLogin$, onLogin] = withSubject<Response>();
@@ -34,9 +38,15 @@ const App = () => {
 	const promptLogin = useObservable(promptLogin$);
 	const username = useObservable(username$);
 	return (
-		<div>
-			<Nav username={username} onLogin={onLogin} promptLogin={promptLogin} />
-		</div>
+		<BrowserRouter>
+			<div>
+				<Nav username={username} onLogin={onLogin} promptLogin={promptLogin} />
+				<Link to="/todo">Todo list</Link>
+			</div>
+			<Routes>
+				<Route path="todo" element={<TodoList />} />
+			</Routes>
+		</BrowserRouter>
 	);
 };
 
