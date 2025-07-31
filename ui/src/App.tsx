@@ -1,7 +1,7 @@
 import "normalize.css";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import { lazy } from "react";
-import { BrowserRouter, Link, Route, Routes } from "react-router";
+import { BrowserRouter, Route, Routes } from "react-router";
 import { defer, from } from "rxjs";
 import { map, mergeWith, share, startWith, switchMap } from "rxjs/operators";
 import type { Response } from "./GoogleSignIn";
@@ -41,7 +41,6 @@ const App = () => {
 		<BrowserRouter>
 			<div>
 				<Nav username={username} onLogin={onLogin} promptLogin={promptLogin} />
-				<Link to="/todo">Todo list</Link>
 			</div>
 			<Routes>
 				<Route path="/todo/*" element={<TodoList />} />
