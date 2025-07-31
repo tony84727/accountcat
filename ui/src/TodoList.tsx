@@ -2,10 +2,9 @@ import Container from "@mui/material/Container";
 import Grid from "@mui/material/Grid";
 import Tabs from "@mui/material/Tabs";
 import LinkTab from "./LinkTab";
-import { useRouteMatch } from "./muiutils";
+import { useRouteMatchCurrentTab } from "./muiutils";
 export default function TodoList() {
-	const routeMatch = useRouteMatch(["/todo/history", "/todo"]);
-	const currentTab = routeMatch?.pattern?.path;
+	const currentTab = useRouteMatchCurrentTab(["/todo/history", "/todo"]);
 	return (
 		<Container>
 			<Grid container>
