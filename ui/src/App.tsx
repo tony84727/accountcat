@@ -44,7 +44,7 @@ const App = () => {
 				<Link to="/todo">Todo list</Link>
 			</div>
 			<Routes>
-				<Route path="todo" element={<TodoList />} />
+				<Route path="/todo/*" element={<TodoList />} />
 			</Routes>
 		</BrowserRouter>
 	);
