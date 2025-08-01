@@ -10,7 +10,7 @@ import { UserClient } from "./proto/UserServiceClientPb";
 import { LoginRequest } from "./proto/user_pb";
 import { useObservable, withSubject } from "./rxjsutils";
 
-const TodoList = lazy(() => import("./TodoList"));
+const TodoList = lazy(() => import("./TodoList.tsx"));
 
 const userClient = new UserClient("/api");
 const [onLogin$, onLogin] = withSubject<Response>();
