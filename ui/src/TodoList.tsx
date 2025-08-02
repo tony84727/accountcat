@@ -8,20 +8,67 @@ import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
-import { type FormEvent, useCallback, useState } from "react";
+import { Empty } from "google-protobuf/google/protobuf/empty_pb";
+import type { MouseEvent } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+import {
+	defer,
+	filter,
+	map,
+	mergeWith,
+	type Observable,
+	Subject,
+	share,
+	startWith,
+	switchMap,
+	takeUntil,
+	withLatestFrom,
+} from "rxjs";
+import { TodolistClient } from "./proto/TodolistServiceClientPb";
+import { NewTask } from "./proto/todolist_pb";
 export default function TodoList() {
-	const [tasks, setTasks] = useState<string[]>([]);
+	const [tasks, setTasks] = useState<string[]>();
 	const [taskName, setTaskName] = useState<string>("");
-	const onTaskNameInput = useCallback((event: FormEvent<HTMLInputElement>) => {
-		setTaskName((event.target as HTMLInputElement).value);
+	const [onTaskNameInput, setOnTaskNameInput] =
+		useState<(event: FormEvent) => void>();
+	const [onAddTask, setOnAddTask] = useState<(event: MouseEvent) => void>();
+	useEffect(() => {
+		const todoService = new TodolistClient("/api");
+		const bye$ = new Subject();
+		const taskNameInput$ = new Subject<FormEvent>();
+		setOnTaskNameInput(() => (event: FormEvent) => taskNameInput$.next(event));
+		const addTask$ = new Subject<MouseEvent>();
+		setOnAddTask(() => (event: MouseEvent) => addTask$.next(event));
+
+		const taskName$: Observable<string> = taskNameInput$.pipe(
+			map((event) => (event.target as HTMLInputElement).value),
+			mergeWith(defer(() => addTaskResult$).pipe(map(() => ""))),
+		);
+		const addTaskResult$ = addTask$.pipe(
+			withLatestFrom(taskName$),
+			map(([, name]) => name),
+			filter(Boolean),
+			switchMap((name) => {
+				const request = new NewTask();
+				request.setName(name);
+				return todoService.add(request);
+			}),
+			share(),
+		);
+		const tasks$ = addTaskResult$.pipe(
+			startWith(undefined),
+			switchMap(() => todoService.list(new Empty())),
+			share(),
+			map((response) => response.getTasksList().map((task) => task.getName())),
+		);
+
+		taskName$.pipe(takeUntil(bye$)).subscribe(setTaskName);
+		tasks$.pipe(takeUntil(bye$)).subscribe(setTasks);
+		return () => {
+			bye$.next(undefined);
+			bye$.complete();
+		};
 	}, []);
-	const onAddTask = useCallback(() => {
-		if (!taskName) {
-			return;
-		}
-		setTasks((x) => [...x, taskName]);
-		setTaskName("");
-	}, [taskName]);
 	return (
 		<Container>
 			<Box>
@@ -35,7 +82,7 @@ export default function TodoList() {
 			</Box>
 
 			<List>
-				{tasks.map((x, i) => (
+				{(tasks ?? []).map((x, i) => (
 					<>
 						<ListItem key={`${i}${x}`}>
 							<ListItemIcon>
