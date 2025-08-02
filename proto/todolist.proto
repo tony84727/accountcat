@@ -3,6 +3,8 @@ syntax = "proto3";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
+package accountcat.todolist;
+
 message Task {
   string id = 1;
   string name = 2;
@@ -11,7 +13,7 @@ message Task {
   google.protobuf.Timestamp created_at = 5;
 }
 
-message TodoList {
+message ListResult {
   repeated Task tasks = 1;
 }
 
@@ -21,6 +23,6 @@ message NewTask {
 }
 
 service Todolist {
-  rpc List(google.protobuf.Empty) returns (TodoList) {}
+  rpc List(google.protobuf.Empty) returns (ListResult) {}
   rpc Add(NewTask) returns (google.protobuf.Empty) {}
 }
