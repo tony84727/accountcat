@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { map, type Observable, Subject } from "rxjs";
 import type { AjaxResponse } from "rxjs/ajax";
 
@@ -15,10 +15,10 @@ export function unwrapResponse<T>() {
 	return map(({ response }: AjaxResponse<T>) => response);
 }
 
-export function withSubject<T = undefined>(): [
+export function useSubject<T = undefined>(): [
 	Observable<T>,
 	(event: T) => void,
 ] {
-	const subject = new Subject<T>();
+	const subject = useMemo(() => new Subject<T>(), []);
 	return [subject, (x: T) => subject.next(x)];
 }
