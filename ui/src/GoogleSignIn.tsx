@@ -47,5 +47,5 @@ export default function GoogleSignIn(props: Props) {
 			delete window.onGoogleLogin;
 		};
 	}, [props.loginCallback]);
-	return;
+	return null;
 }
