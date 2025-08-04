@@ -1,12 +1,11 @@
 use std::sync::Arc;
 
-use prost_types::Timestamp;
-use sqlx::types::time::OffsetDateTime;
 use tonic::{Request, Response};
 
 use crate::{
     auth::get_claims,
     idl::todolist::{ListResult, NewTask, Task, TaskUpdate, todolist_server::Todolist},
+    protobufutils::to_proto_timestamp,
     server::ServerState,
 };
 
@@ -17,13 +16,6 @@ pub struct TodolistApi {
 impl TodolistApi {
     pub fn new(state: Arc<ServerState>) -> Self {
         Self { state }
-    }
-}
-
-fn to_proto_timestamp(datetime: OffsetDateTime) -> Timestamp {
-    Timestamp {
-        seconds: datetime.unix_timestamp(),
-        nanos: datetime.nanosecond() as i32,
     }
 }
 
