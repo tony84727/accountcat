@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select todo_tasks.id, todo_tasks.name, todo_tasks.description, todo_tasks.completed, todo_tasks.created_at\nfrom todo_tasks\njoin users on users.id = todo_tasks.user_id\nwhere google_sub = $1\norder by todo_tasks.created_at desc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "completed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "712b303325fb2448d1701d4d7de748360962d33ffe8bb83e8304f21fece827d0"
+}

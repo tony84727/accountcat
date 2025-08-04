@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into todo_tasks (user_id, name, description)\nselect users.id, $1, $2\nfrom users\nwhere google_sub = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e218812d9f9e2f18a3da9a63f8b3d4dcacca30b405d159ec42c365fae476206d"
+}

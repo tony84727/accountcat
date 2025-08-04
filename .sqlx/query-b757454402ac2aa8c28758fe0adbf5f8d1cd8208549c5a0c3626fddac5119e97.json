@@ -1,0 +1,54 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update todo_tasks\nset completed = coalesce($3, todo_tasks.completed)\nfrom users\nwhere todo_tasks.id = $1 and todo_tasks.user_id = users.id and users.google_sub = $2\nreturning todo_tasks.*",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "description",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "completed",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "b757454402ac2aa8c28758fe0adbf5f8d1cd8208549c5a0c3626fddac5119e97"
+}
