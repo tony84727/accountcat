@@ -1,16 +1,10 @@
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Checkbox from "@mui/material/Checkbox";
 import Container from "@mui/material/Container";
 import Divider from "@mui/material/Divider";
 import Input from "@mui/material/Input";
 import List from "@mui/material/List";
-import ListItem from "@mui/material/ListItem";
-import ListItemIcon from "@mui/material/ListItemIcon";
-import ListItemText from "@mui/material/ListItemText";
-import { format } from "date-fns";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
-import type { Timestamp } from "google-protobuf/google/protobuf/timestamp_pb";
 import type { MouseEvent } from "react";
 import { type FormEvent, Fragment, useEffect, useState } from "react";
 import {
@@ -28,14 +22,8 @@ import {
 } from "rxjs";
 import { TodolistClient } from "./proto/TodolistServiceClientPb";
 import { NewTask, type Task } from "./proto/todolist_pb";
+import TodoTask from "./TodoTask";
 
-function formatTimestamp(timestamp?: Timestamp): string {
-	if (!timestamp) {
-		return "";
-	}
-	const date = timestamp.toDate();
-	return format(date, "yyyy-MM-dd hh:mm:ss aa");
-}
 export default function TodoList() {
 	const [tasks, setTasks] = useState<Task[]>();
 	const [taskName, setTaskName] = useState<string>("");
@@ -94,15 +82,7 @@ export default function TodoList() {
 			<List>
 				{(tasks ?? []).map((x, i) => (
 					<Fragment key={`${i}${x}`}>
-						<ListItem>
-							<ListItemIcon>
-								<Checkbox />
-							</ListItemIcon>
-							<ListItemText
-								primary={x.getName()}
-								secondary={formatTimestamp(x.getCreatedAt())}
-							/>
-						</ListItem>
+						<TodoTask task={x} />
 						<Divider component="li" />
 					</Fragment>
 				))}
