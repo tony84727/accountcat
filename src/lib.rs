@@ -1,3 +1,4 @@
+mod auth;
 pub mod config;
 pub mod idl;
 pub mod jwtutils;
