@@ -50,7 +50,8 @@ impl Todolist for TodolistApi {
             "select todo_tasks.id, todo_tasks.name, todo_tasks.description, todo_tasks.completed, todo_tasks.created_at
 from todo_tasks
 join users on users.id = todo_tasks.user_id
-where google_sub = $1",
+where google_sub = $1
+order by todo_tasks.created_at desc",
             claims.sub
         )
         .map(|x| Task {
