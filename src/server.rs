@@ -7,7 +7,8 @@ use sqlx::{
 };
 use tonic_web::GrpcWebLayer;
 use tower_http::services::ServeDir;
-use tower_sessions::{MemoryStore, SessionManagerLayer};
+use tower_sessions::SessionManagerLayer;
+use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
     config::{self, Config},
@@ -38,9 +39,9 @@ async fn init_state() -> ServerState {
 pub async fn main() {
     tracing_subscriber::fmt::init();
     let serve_ui = ServeDir::new("ui/dist");
-    let session_store = MemoryStore::default();
-    let session_layer = SessionManagerLayer::new(session_store);
     let server_state = Arc::new(init_state().await);
+    let session_store = PostgresStore::new(server_state.database.clone());
+    let session_layer = SessionManagerLayer::new(session_store);
     let user_api = UserServer::new(user_service::UserApi::new(server_state.clone()));
     let todolist_api =
         TodolistServer::new(todolist_service::TodolistApi::new(server_state.clone()));
