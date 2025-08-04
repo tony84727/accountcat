@@ -2,7 +2,7 @@ PROTO_OUT_DIR=src/proto/
 GRPC_WEB_PLUGIN := tools/protoc-gen-grpc-web
 GRPC_WEB_OUTPUT_OPTIONS := import_style=typescript,mode=grpcwebtext
 PROTOC_FLAGS := -I../proto --plugin=protoc-gen-grpc-web=$(GRPC_WEB_PLUGIN)
-SERVICES := todolist user
+SERVICES := todolist user accounting
 SERVICE_CLIENT_PBS := $(foreach service,$(SERVICES),src/proto/$(shell echo $(service)|sed 's/.*/\u&/')ServiceClientPb.ts)
 
 all: frontend
