@@ -22,7 +22,13 @@ message NewTask {
   optional string description = 2;
 }
 
+message TaskUpdate {
+  string id = 1;
+  optional bool completed = 2;
+}
+
 service Todolist {
   rpc List(google.protobuf.Empty) returns (ListResult) {}
   rpc Add(NewTask) returns (google.protobuf.Empty) {}
+  rpc UpdateTask(TaskUpdate) returns (Task) {}
 }

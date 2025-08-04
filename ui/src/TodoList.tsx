@@ -21,7 +21,7 @@ import {
 	withLatestFrom,
 } from "rxjs";
 import { TodolistClient } from "./proto/TodolistServiceClientPb";
-import { NewTask, type Task } from "./proto/todolist_pb";
+import { NewTask, type Task, TaskUpdate } from "./proto/todolist_pb";
 import TodoTask from "./TodoTask";
 
 export default function TodoList() {
@@ -30,13 +30,21 @@ export default function TodoList() {
 	const [onTaskNameInput, setOnTaskNameInput] =
 		useState<(event: FormEvent) => void>();
 	const [onAddTask, setOnAddTask] = useState<(event: MouseEvent) => void>();
+	const [onTaskCompletedChange, setOnTaskCompletedChange] =
+		useState<(id: string, completed: boolean) => void>();
 	useEffect(() => {
 		const todoService = new TodolistClient("/api");
 		const bye$ = new Subject();
 		const taskNameInput$ = new Subject<FormEvent>();
-		setOnTaskNameInput(() => (event: FormEvent) => taskNameInput$.next(event));
 		const addTask$ = new Subject<MouseEvent>();
+		const taskCompletedChange$: Subject<[id: string, completed: boolean]> =
+			new Subject();
+		setOnTaskNameInput(() => (event: FormEvent) => taskNameInput$.next(event));
 		setOnAddTask(() => (event: MouseEvent) => addTask$.next(event));
+		setOnTaskCompletedChange(
+			() => (id: string, completed?: boolean) =>
+				taskCompletedChange$.next([id, completed ?? false]),
+		);
 
 		const taskName$: Observable<string> = taskNameInput$.pipe(
 			map((event) => (event.target as HTMLInputElement).value),
@@ -53,7 +61,16 @@ export default function TodoList() {
 			}),
 			share(),
 		);
-		const tasks$ = addTaskResult$.pipe(
+		const updateTaskResult$ = taskCompletedChange$.pipe(
+			switchMap(([id, completed]) => {
+				const update = new TaskUpdate();
+				update.setId(id);
+				update.setCompleted(completed);
+				return todoService.updateTask(update);
+			}),
+		);
+		const reloadTasks$ = addTaskResult$.pipe(mergeWith(updateTaskResult$));
+		const tasks$ = reloadTasks$.pipe(
 			startWith(undefined),
 			switchMap(() => todoService.list(new Empty())),
 			share(),
@@ -82,7 +99,12 @@ export default function TodoList() {
 			<List>
 				{(tasks ?? []).map((x, i) => (
 					<Fragment key={`${i}${x}`}>
-						<TodoTask task={x} />
+						<TodoTask
+							task={x}
+							onCompletedChange={(completed) =>
+								onTaskCompletedChange?.(x.getId(), completed)
+							}
+						/>
 						<Divider component="li" />
 					</Fragment>
 				))}

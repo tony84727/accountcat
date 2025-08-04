@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
 use prost_types::Timestamp;
+use sqlx::types::time::OffsetDateTime;
 use tonic::{Request, Response};
 use tower_sessions::Session;
 
 use crate::{
-    idl::todolist::{ListResult, NewTask, Task, todolist_server::Todolist},
+    idl::todolist::{ListResult, NewTask, Task, TaskUpdate, todolist_server::Todolist},
     jwtutils::Claims,
     server::{SESSION_KEY_CLAIMS, ServerState},
 };
@@ -21,6 +22,13 @@ impl TodolistApi {
 }
 
 const NOT_LOGIN: &str = "please login first";
+
+fn to_proto_timestamp(datetime: OffsetDateTime) -> Timestamp {
+    Timestamp {
+        seconds: datetime.unix_timestamp(),
+        nanos: datetime.nanosecond() as i32,
+    }
+}
 
 #[tonic::async_trait]
 impl Todolist for TodolistApi {
@@ -50,10 +58,7 @@ where google_sub = $1",
             name: x.name.unwrap_or_default(),
             completed: x.completed,
             description: x.description,
-            created_at: x.created_at.map(|x| Timestamp {
-                seconds: x.unix_timestamp(),
-                nanos: x.nanosecond() as i32,
-            }),
+            created_at: x.created_at.map(to_proto_timestamp),
         })
         .fetch_all(&self.state.database)
         .await
@@ -98,5 +103,47 @@ where google_sub = $3",
             return Err(tonic::Status::internal(String::new()));
         };
         Ok(Response::new(()))
+    }
+
+    async fn update_task(&self, request: Request<TaskUpdate>) -> tonic::Result<Response<Task>> {
+        let session: Option<&Session> = request.extensions().get();
+        let Some(session) = session else {
+            return Err(tonic::Status::unauthenticated(NOT_LOGIN));
+        };
+        let claims = match session.get::<Claims>(SESSION_KEY_CLAIMS).await {
+            Ok(Some(claims)) => claims,
+            Ok(None) => {
+                return Err(tonic::Status::unauthenticated(NOT_LOGIN));
+            }
+            Err(_err) => {
+                return Err(tonic::Status::internal(String::new()));
+            }
+        };
+        let TaskUpdate { id, completed } = request.into_inner();
+        let Ok(id) = id.parse::<i32>() else {
+            return Err(tonic::Status::not_found(String::new()));
+        };
+        let Ok(task) = sqlx::query!(
+            "update todo_tasks
+set completed = coalesce($3, todo_tasks.completed)
+from users
+where todo_tasks.id = $1 and todo_tasks.user_id = users.id and users.google_sub = $2
+returning todo_tasks.*",
+            id,
+            claims.sub,
+            completed
+        )
+        .fetch_one(&self.state.database)
+        .await
+        else {
+            return Err(tonic::Status::internal(String::new()));
+        };
+        Ok(Response::new(Task {
+            id: task.id.to_string(),
+            name: task.name.unwrap_or_default(),
+            completed: task.completed,
+            description: task.description,
+            created_at: task.created_at.map(to_proto_timestamp),
+        }))
     }
 }
