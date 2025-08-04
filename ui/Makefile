@@ -1,6 +1,8 @@
 PROTO_OUT_DIR=src/proto/
 GRPC_WEB_PLUGIN := tools/protoc-gen-grpc-web
 GRPC_WEB_OUTPUT_OPTIONS := import_style=typescript,mode=grpcwebtext
+PROTOC_FLAGS := -I../proto --plugin=protoc-gen-grpc-web=$(GRPC_WEB_PLUGIN)
+SERVICES := todolist user
 
 all: frontend
 
@@ -8,7 +10,7 @@ all: frontend
 frontend: proto
 	npm run build
 
-proto: src/proto/UserServiceClientPb.ts src/proto/TodolistServiceClientPb.ts
+proto: $(SERVICES:%=src/proto/%_pb.d.ts) $(SERVICES:%=src/proto/%_pb.js) $(foreach service,$(SERVICES),src/proto/$(shell echo $(service)|sed 's/.*/\u&/')ServiceClientPb.ts)
 
 tools/:
 	@mkdir -p tools
@@ -16,14 +18,10 @@ tools/:
 $(PROTO_OUT_DIR):
 	@mkdir -p $@
 
-PROTOC_FLAGS := -I../proto --plugin=protoc-gen-grpc-web=$(GRPC_WEB_PLUGIN)
-
-src/proto/user_pb.d.ts src/proto/UserServiceClientPb.ts: ../proto/user.proto tools/protoc-gen-grpc-web $(PROTO_OUT_DIR)
+src/proto/%_pb.js src/proto/%_pb.d.ts: ../proto/%.proto tools/protoc-gen-grpc-web $(PROTO_OUT_DIR)
 	protoc $(PROTOC_FLAGS) --js_out=import_style=commonjs:src/proto --grpc-web_out=$(GRPC_WEB_OUTPUT_OPTIONS):src/proto $<
 
-src/proto/todolist_pb.d.ts src/proto/TodolistServiceClientPb.ts: ../proto/todolist.proto tools/protoc-gen-grpc-web $(PROTO_OUT_DIR)
-	protoc $(PROTOC_FLAGS) --js_out=import_style=commonjs:src/proto --grpc-web_out=$(GRPC_WEB_OUTPUT_OPTIONS):src/proto $<
-
+%ServiceClientPb.ts: src/proto/%_pd.d.ts
 
 .DELETE_ON_ERROR:
 $(GRPC_WEB_PLUGIN): tools/
