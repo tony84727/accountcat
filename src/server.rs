@@ -11,9 +11,9 @@ use tower_sessions::{MemoryStore, SessionManagerLayer};
 
 use crate::{
     config::{self, Config},
-    idl::user_server::UserServer,
+    idl::{todolist::todolist_server::TodolistServer, user::user_server::UserServer},
     jwtutils::{self, JwtVerifier},
-    user_service,
+    todolist_service, user_service,
 };
 
 pub const SESSION_KEY_CLAIMS: &str = "claims";
@@ -31,10 +31,7 @@ async fn init_state() -> ServerState {
     let connection = PgConnectOptions::from(database.unwrap_or_default());
     ServerState {
         jwt_verify: verifier,
-        database: PgPoolOptions::new()
-            .connect_with(connection)
-            .await
-            .expect("failed to connect database"),
+        database: PgPoolOptions::new().connect_lazy_with(connection),
     }
 }
 
@@ -45,8 +42,11 @@ pub async fn main() {
     let session_layer = SessionManagerLayer::new(session_store);
     let server_state = Arc::new(init_state().await);
     let user_api = UserServer::new(user_service::UserApi::new(server_state.clone()));
+    let todolist_api =
+        TodolistServer::new(todolist_service::TodolistApi::new(server_state.clone()));
     let mut grpc_server_builder = tonic::service::Routes::builder();
     grpc_server_builder.add_service(user_api);
+    grpc_server_builder.add_service(todolist_api);
     let grpc_server = grpc_server_builder.routes();
 
     let app = Router::new()

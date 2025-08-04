@@ -4,7 +4,7 @@ use tonic::{Request, Response};
 use tower_sessions::Session;
 
 use crate::{
-    idl::{LoginRequest, Profile},
+    idl::user::{LoginRequest, Profile, user_server::User},
     jwtutils::Claims,
     server::{SESSION_KEY_CLAIMS, ServerState},
 };
@@ -20,7 +20,7 @@ impl UserApi {
 }
 
 #[tonic::async_trait]
-impl crate::idl::user_server::User for UserApi {
+impl User for UserApi {
     async fn login(
         &self,
         request: Request<LoginRequest>,

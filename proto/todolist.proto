@@ -1,0 +1,34 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+package accountcat.todolist;
+
+message Task {
+  string id = 1;
+  string name = 2;
+  bool completed = 3;
+  optional string description = 4;
+  google.protobuf.Timestamp created_at = 5;
+}
+
+message ListResult {
+  repeated Task tasks = 1;
+}
+
+message NewTask {
+  string name = 1;
+  optional string description = 2;
+}
+
+message TaskUpdate {
+  string id = 1;
+  optional bool completed = 2;
+}
+
+service Todolist {
+  rpc List(google.protobuf.Empty) returns (ListResult) {}
+  rpc Add(NewTask) returns (google.protobuf.Empty) {}
+  rpc UpdateTask(TaskUpdate) returns (Task) {}
+}
