@@ -12,7 +12,7 @@ import { format } from "date-fns";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import type { Timestamp } from "google-protobuf/google/protobuf/timestamp_pb";
 import type { MouseEvent } from "react";
-import { type FormEvent, useEffect, useState } from "react";
+import { type FormEvent, Fragment, useEffect, useState } from "react";
 import {
 	defer,
 	filter,
@@ -93,8 +93,8 @@ export default function TodoList() {
 
 			<List>
 				{(tasks ?? []).map((x, i) => (
-					<>
-						<ListItem key={`${i}${x}`}>
+					<Fragment key={`${i}${x}`}>
+						<ListItem>
 							<ListItemIcon>
 								<Checkbox />
 							</ListItemIcon>
@@ -104,7 +104,7 @@ export default function TodoList() {
 							/>
 						</ListItem>
 						<Divider component="li" />
-					</>
+					</Fragment>
 				))}
 			</List>
 		</Container>
