@@ -1,6 +1,5 @@
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
-import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import Typography from "@mui/material/Typography";
 import type { Response } from "./GoogleSignIn";
@@ -15,7 +14,7 @@ interface Props {
 }
 
 export default function Nav({ username, promptLogin, onLogin }: Props) {
-	const currentTab = useRouteMatchCurrentTab(["/todo/*"]);
+	const currentTab = useRouteMatchCurrentTab(["/todo/*", "/accounting/*"]);
 	return (
 		<Box component="nav" sx={{ marginBottom: 2, display: "flex" }}>
 			<Typography variant="h5" p={1}>
@@ -23,8 +22,8 @@ export default function Nav({ username, promptLogin, onLogin }: Props) {
 			</Typography>
 			<Container sx={{ flexGrow: 1 }}>
 				<Tabs value={currentTab}>
-					<LinkTab to="/todo" value="/todo/*" label="Todo" />
-					<Tab value="/finance" label="Finance" disabled />
+					<LinkTab to="/todo" value="/todo/*" label="代辦事項" />
+					<LinkTab to="/accounting" value="/accounting/*" label="記帳" />
 				</Tabs>
 			</Container>
 
