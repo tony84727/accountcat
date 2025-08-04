@@ -8,7 +8,9 @@ import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
 import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
+import { format } from "date-fns";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
+import type { Timestamp } from "google-protobuf/google/protobuf/timestamp_pb";
 import type { MouseEvent } from "react";
 import { type FormEvent, useEffect, useState } from "react";
 import {
@@ -25,9 +27,17 @@ import {
 	withLatestFrom,
 } from "rxjs";
 import { TodolistClient } from "./proto/TodolistServiceClientPb";
-import { NewTask } from "./proto/todolist_pb";
+import { NewTask, type Task } from "./proto/todolist_pb";
+
+function formatTimestamp(timestamp?: Timestamp): string {
+	if (!timestamp) {
+		return "";
+	}
+	const date = timestamp.toDate();
+	return format(date, "yyyy-MM-dd hh:mm:ss aa");
+}
 export default function TodoList() {
-	const [tasks, setTasks] = useState<string[]>();
+	const [tasks, setTasks] = useState<Task[]>();
 	const [taskName, setTaskName] = useState<string>("");
 	const [onTaskNameInput, setOnTaskNameInput] =
 		useState<(event: FormEvent) => void>();
@@ -59,7 +69,7 @@ export default function TodoList() {
 			startWith(undefined),
 			switchMap(() => todoService.list(new Empty())),
 			share(),
-			map((response) => response.getTasksList().map((task) => task.getName())),
+			map((response) => response.getTasksList()),
 		);
 
 		taskName$.pipe(takeUntil(bye$)).subscribe(setTaskName);
@@ -88,7 +98,10 @@ export default function TodoList() {
 							<ListItemIcon>
 								<Checkbox />
 							</ListItemIcon>
-							<ListItemText primary={x} secondary="date" />
+							<ListItemText
+								primary={x.getName()}
+								secondary={formatTimestamp(x.getCreatedAt())}
+							/>
 						</ListItem>
 						<Divider component="li" />
 					</>
