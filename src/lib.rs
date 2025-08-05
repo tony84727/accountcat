@@ -1,3 +1,4 @@
+mod accounting_service;
 mod auth;
 pub mod config;
 pub mod idl;
