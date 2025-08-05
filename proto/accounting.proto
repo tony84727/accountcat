@@ -3,16 +3,18 @@ syntax = "proto3";
 import "google/protobuf/empty.proto";
 import "google/protobuf/timestamp.proto";
 
+package accountcat.accounting;
+
 message NewItem {
   string name = 1;
-  float income = 2;
-  float expense = 3;
+  string income = 2;
+  string expense = 3;
 }
 
 message Item {
   string name = 1;
-  float income = 2;
-  float expense = 3;
+  string income = 2;
+  string expense = 3;
   google.protobuf.Timestamp created_at = 4;
 }
 
