@@ -1,2 +1,4 @@
 /target
 /server.toml
+*.local
+.env

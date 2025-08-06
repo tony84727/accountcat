@@ -1,14 +1,12 @@
 use std::sync::Arc;
 
-use prost_types::Timestamp;
-use sqlx::types::time::OffsetDateTime;
 use tonic::{Request, Response};
-use tower_sessions::Session;
 
 use crate::{
+    auth::get_claims,
     idl::todolist::{ListResult, NewTask, Task, TaskUpdate, todolist_server::Todolist},
-    jwtutils::Claims,
-    server::{SESSION_KEY_CLAIMS, ServerState},
+    protobufutils::to_proto_timestamp,
+    server::ServerState,
 };
 
 pub struct TodolistApi {
@@ -21,31 +19,10 @@ impl TodolistApi {
     }
 }
 
-const NOT_LOGIN: &str = "please login first";
-
-fn to_proto_timestamp(datetime: OffsetDateTime) -> Timestamp {
-    Timestamp {
-        seconds: datetime.unix_timestamp(),
-        nanos: datetime.nanosecond() as i32,
-    }
-}
-
 #[tonic::async_trait]
 impl Todolist for TodolistApi {
     async fn list(&self, request: Request<()>) -> tonic::Result<Response<ListResult>> {
-        let session: Option<&Session> = request.extensions().get();
-        let Some(session) = session else {
-            return Err(tonic::Status::unauthenticated(NOT_LOGIN));
-        };
-        let claims = match session.get::<Claims>(SESSION_KEY_CLAIMS).await {
-            Ok(Some(claims)) => claims,
-            Ok(None) => {
-                return Err(tonic::Status::unauthenticated(NOT_LOGIN));
-            }
-            Err(_err) => {
-                return Err(tonic::Status::internal(String::new()));
-            }
-        };
+        let claims = get_claims(&request).await?;
         let tasks = match sqlx::query!(
             "select todo_tasks.id, todo_tasks.name, todo_tasks.description, todo_tasks.completed, todo_tasks.created_at
 from todo_tasks
@@ -74,19 +51,7 @@ order by todo_tasks.created_at desc",
     }
 
     async fn add(&self, request: Request<NewTask>) -> tonic::Result<Response<()>> {
-        let session: Option<&Session> = request.extensions().get();
-        let Some(session) = session else {
-            return Err(tonic::Status::unauthenticated(NOT_LOGIN));
-        };
-        let claims = match session.get::<Claims>(SESSION_KEY_CLAIMS).await {
-            Ok(Some(claims)) => claims,
-            Ok(None) => {
-                return Err(tonic::Status::unauthenticated(NOT_LOGIN));
-            }
-            Err(_err) => {
-                return Err(tonic::Status::internal(String::new()));
-            }
-        };
+        let claims = get_claims(&request).await?;
         let NewTask { name, description } = request.into_inner();
         if sqlx::query!(
             "insert into todo_tasks (user_id, name, description)
@@ -107,19 +72,7 @@ where google_sub = $3",
     }
 
     async fn update_task(&self, request: Request<TaskUpdate>) -> tonic::Result<Response<Task>> {
-        let session: Option<&Session> = request.extensions().get();
-        let Some(session) = session else {
-            return Err(tonic::Status::unauthenticated(NOT_LOGIN));
-        };
-        let claims = match session.get::<Claims>(SESSION_KEY_CLAIMS).await {
-            Ok(Some(claims)) => claims,
-            Ok(None) => {
-                return Err(tonic::Status::unauthenticated(NOT_LOGIN));
-            }
-            Err(_err) => {
-                return Err(tonic::Status::internal(String::new()));
-            }
-        };
+        let claims = get_claims(&request).await?;
         let TaskUpdate { id, completed } = request.into_inner();
         let Ok(id) = id.parse::<i32>() else {
             return Err(tonic::Status::not_found(String::new()));

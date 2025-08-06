@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select accounting_items.id, accounting_items.name, accounting_items.income, accounting_items.expense, accounting_items.created_at\nfrom accounting_items\njoin users on users.id = accounting_items.user_id\nwhere users.google_sub = $1\norder by accounting_items.created_at desc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "income",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "expense",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "920b54e7339b8ee6c30f5c059d3bb10c0f115204331d543f623182b69ccbfb7e"
+}

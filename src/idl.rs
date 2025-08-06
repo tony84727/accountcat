@@ -4,3 +4,7 @@ pub mod user {
 pub mod todolist {
     tonic::include_proto!("accountcat.todolist");
 }
+
+pub mod accounting {
+    tonic::include_proto!("accountcat.accounting");
+}

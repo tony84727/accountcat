@@ -18,6 +18,7 @@ import { LoginRequest } from "./proto/user_pb";
 import { useSubject } from "./rxjsutils";
 
 const TodoList = lazy(() => import("./TodoList.tsx"));
+const Accounting = lazy(() => import("./Accounting.tsx"));
 
 const userClient = new UserClient("/api");
 
@@ -58,6 +59,7 @@ const App = () => {
 			</div>
 			<Routes>
 				<Route path="/todo/*" element={<TodoList />} />
+				<Route path="/accounting/*" element={<Accounting />} />
 			</Routes>
 		</BrowserRouter>
 	);

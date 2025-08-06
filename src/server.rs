@@ -11,8 +11,12 @@ use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
+    accounting_service,
     config::{self, Config},
-    idl::{todolist::todolist_server::TodolistServer, user::user_server::UserServer},
+    idl::{
+        accounting::accounting_server::AccountingServer, todolist::todolist_server::TodolistServer,
+        user::user_server::UserServer,
+    },
     jwtutils::{self, JwtVerifier},
     todolist_service, user_service,
 };
@@ -45,9 +49,12 @@ pub async fn main() {
     let user_api = UserServer::new(user_service::UserApi::new(server_state.clone()));
     let todolist_api =
         TodolistServer::new(todolist_service::TodolistApi::new(server_state.clone()));
+    let accounting_api =
+        AccountingServer::new(accounting_service::AccountingApi::new(server_state.clone()));
     let mut grpc_server_builder = tonic::service::Routes::builder();
     grpc_server_builder.add_service(user_api);
     grpc_server_builder.add_service(todolist_api);
+    grpc_server_builder.add_service(accounting_api);
     let grpc_server = grpc_server_builder.routes();
 
     let app = Router::new()
