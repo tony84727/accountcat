@@ -12,10 +12,11 @@ message NewItem {
 }
 
 message Item {
-  string name = 1;
-  string income = 2;
-  string expense = 3;
-  google.protobuf.Timestamp created_at = 4;
+  string id = 1;
+  string name = 2;
+  string income = 3;
+  string expense = 4;
+  google.protobuf.Timestamp created_at = 5;
 }
 
 message ItemList {
@@ -24,4 +25,5 @@ message ItemList {
 
 service Accounting {
   rpc List(google.protobuf.Empty) returns (ItemList) {}
+  rpc Add(NewItem) returns (Item) {}
 }
