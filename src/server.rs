@@ -1,12 +1,17 @@
 use std::sync::Arc;
 
 use axum::Router;
+use http::{HeaderName, HeaderValue};
 use sqlx::{
     PgPool,
     postgres::{PgConnectOptions, PgPoolOptions},
 };
 use tonic_web::GrpcWebLayer;
-use tower_http::services::{ServeDir, ServeFile};
+use tower::ServiceBuilder;
+use tower_http::{
+    services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
+};
 use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
 
@@ -43,6 +48,14 @@ async fn init_state() -> ServerState {
 pub async fn main() {
     tracing_subscriber::fmt::init();
     let serve_ui = ServeDir::new("ui/dist").fallback(ServeFile::new("ui/dist/index.html"));
+    let asset_service = ServiceBuilder::new()
+        .layer(SetResponseHeaderLayer::overriding(
+            HeaderName::from_bytes(b"Content-Security-Policy").unwrap(),
+            HeaderValue::from_static(
+                "script-src 'self' https://accounts.google.com/gsi/client;default-src 'self' 'unsafe-inline';",
+            ),
+        ))
+        .service(serve_ui);
     let server_state = Arc::new(init_state().await);
     let session_store = PostgresStore::new(server_state.database.clone());
     let session_layer = SessionManagerLayer::new(session_store);
@@ -65,7 +78,7 @@ pub async fn main() {
                 .layer(GrpcWebLayer::new())
                 .layer(session_layer),
         )
-        .fallback_service(serve_ui);
+        .fallback_service(asset_service);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     axum::serve(listener, app).await.unwrap();

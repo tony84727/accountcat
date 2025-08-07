@@ -7,6 +7,7 @@ name = "accountcat"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "http",
  "jsonwebtoken",
  "prost",
  "prost-types",
@@ -18,6 +19,7 @@ dependencies = [
  "tonic",
  "tonic-build",
  "tonic-web",
+ "tower",
  "tower-http",
  "tower-sessions",
  "tower-sessions-sqlx-store",
