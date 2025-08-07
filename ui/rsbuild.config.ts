@@ -17,4 +17,9 @@ export default defineConfig({
 			"/api": "http://localhost:3000",
 		},
 	},
+	security: {
+		sri: {
+			enable: "auto",
+		},
+	},
 });
