@@ -6,7 +6,7 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
 };
 use tonic_web::GrpcWebLayer;
-use tower_http::services::ServeDir;
+use tower_http::services::{ServeDir, ServeFile};
 use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
 
@@ -42,7 +42,7 @@ async fn init_state() -> ServerState {
 
 pub async fn main() {
     tracing_subscriber::fmt::init();
-    let serve_ui = ServeDir::new("ui/dist");
+    let serve_ui = ServeDir::new("ui/dist").fallback(ServeFile::new("ui/dist/index.html"));
     let server_state = Arc::new(init_state().await);
     let session_store = PostgresStore::new(server_state.database.clone());
     let session_layer = SessionManagerLayer::new(session_store);
