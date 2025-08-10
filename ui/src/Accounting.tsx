@@ -30,12 +30,16 @@ import {
 import styles from "./Accounting.module.scss";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import { type Item, NewItem } from "./proto/accounting_pb";
+import { createCallback } from "./rxjsutils";
 import { formatTimestamp } from "./time";
 
 type TextFieldChangeEventHandler = FormEventHandler<
 	HTMLInputElement | HTMLTextAreaElement
 >;
 type TextFieldChangeEvent = FormEvent<HTMLInputElement | HTMLTextAreaElement>;
+
+const extractTextFieldValue = () =>
+	map((event: TextFieldChangeEvent) => event.currentTarget.value);
 
 export default function Accounting() {
 	const [onNameChange, setOnNameChange] =
@@ -52,22 +56,16 @@ export default function Accounting() {
 	useEffect(() => {
 		const bye$ = new Subject();
 		const accountingService = new AccountingClient("/api");
-		const nameChange$ = new Subject<string>();
-		const incomeChange$ = new Subject<string>();
-		const expenseChange$ = new Subject<string>();
+		const nameChange$ = createCallback(setOnNameChange).pipe(
+			extractTextFieldValue(),
+		);
+		const incomeChange$ = createCallback(setOnIncomeChange).pipe(
+			extractTextFieldValue(),
+		);
+		const expenseChange$ = createCallback(setOnExpenseChange).pipe(
+			extractTextFieldValue(),
+		);
 		const add$ = new Subject();
-		setOnNameChange(
-			() => (event: TextFieldChangeEvent) =>
-				nameChange$.next(event.currentTarget.value),
-		);
-		setOnIncomeChange(
-			() => (event: TextFieldChangeEvent) =>
-				incomeChange$.next(event.currentTarget.value),
-		);
-		setOnExpenseChange(
-			() => (event: TextFieldChangeEvent) =>
-				expenseChange$.next(event.currentTarget.value),
-		);
 		setOnAdd(() => () => add$.next(undefined));
 		const reset$: Observable<unknown> = defer(() => addResult$);
 		const name$ = nameChange$.pipe(

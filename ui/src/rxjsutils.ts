@@ -1,4 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import {
+	type Dispatch,
+	type SetStateAction,
+	useEffect,
+	useMemo,
+	useState,
+} from "react";
 import { map, type Observable, Subject } from "rxjs";
 import type { AjaxResponse } from "rxjs/ajax";
 
@@ -21,4 +27,24 @@ export function useSubject<T = undefined>(): [
 ] {
 	const subject = useMemo(() => new Subject<T>(), []);
 	return [subject, (x: T) => subject.next(x)];
+}
+
+export function createCallback<T>(
+	updateDispatch: Dispatch<SetStateAction<((event: T) => void) | undefined>>,
+): Observable<T> {
+	const event$ = new Subject<T>();
+	updateDispatch(() => (event: T) => event$.next(event));
+	return event$;
+}
+
+export function createMultiArgumentCallback<T extends unknown[]>(
+	updateDispatch: Dispatch<SetStateAction<((...event: T) => void) | undefined>>,
+) {
+	const event$ = new Subject<T>();
+	updateDispatch(
+		() =>
+			(...event: T) =>
+				event$.next(event),
+	);
+	return event$;
 }
