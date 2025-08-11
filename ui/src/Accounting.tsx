@@ -1,7 +1,10 @@
 import AddCircleOutlineIcon from "@mui/icons-material/AddCircleOutline";
+import Autocomplete from "@mui/material/Autocomplete";
 import Button from "@mui/material/Button";
 import Container from "@mui/material/Container";
+import FormControl from "@mui/material/FormControl";
 import Grid from "@mui/material/Grid";
+import InputLabel from "@mui/material/InputLabel";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -12,12 +15,16 @@ import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import {
 	type FormEvent,
 	type FormEventHandler,
+	type SyntheticEvent,
 	useEffect,
 	useState,
 } from "react";
 import {
+	combineLatestWith,
 	defer,
+	from,
 	map,
+	mergeMap,
 	mergeWith,
 	type Observable,
 	Subject,
@@ -25,12 +32,17 @@ import {
 	startWith,
 	switchMap,
 	takeUntil,
+	toArray,
 	withLatestFrom,
 } from "rxjs";
 import styles from "./Accounting.module.scss";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
-import { type Item, NewItem } from "./proto/accounting_pb";
-import { createCallback } from "./rxjsutils";
+import { type Item, NewItem, NewTag, TagSearch } from "./proto/accounting_pb";
+import {
+	createCallback,
+	createMultiArgumentCallback,
+	createNotifier,
+} from "./rxjsutils";
 import { formatTimestamp } from "./time";
 
 type TextFieldChangeEventHandler = FormEventHandler<
@@ -41,6 +53,12 @@ type TextFieldChangeEvent = FormEvent<HTMLInputElement | HTMLTextAreaElement>;
 const extractTextFieldValue = () =>
 	map((event: TextFieldChangeEvent) => event.currentTarget.value);
 
+interface TagOption {
+	id?: string;
+	label: string;
+	create?: string;
+}
+
 export default function Accounting() {
 	const [onNameChange, setOnNameChange] =
 		useState<TextFieldChangeEventHandler>();
@@ -48,11 +66,17 @@ export default function Accounting() {
 		useState<TextFieldChangeEventHandler>();
 	const [onExpenseChange, setOnExpenseChange] =
 		useState<TextFieldChangeEventHandler>();
+	const [onTagChange, setOnTagChange] =
+		useState<(event: SyntheticEvent, selected: TagOption[]) => void>();
+	const [onTagInputChange, registerOnTagInputChange] =
+		useState<(event: SyntheticEvent, value: string, reason: string) => void>();
 	const [onAdd, setOnAdd] = useState<() => void>();
 	const [name, setName] = useState<string>("");
 	const [income, setIncome] = useState<string>("0");
 	const [expense, setExpense] = useState<string>("0");
 	const [items, setItems] = useState<Item[]>();
+	const [selectedTags, setSelectedTags] = useState<TagOption[]>([]);
+	const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
 	useEffect(() => {
 		const bye$ = new Subject();
 		const accountingService = new AccountingClient("/api");
@@ -65,8 +89,11 @@ export default function Accounting() {
 		const expenseChange$ = createCallback(setOnExpenseChange).pipe(
 			extractTextFieldValue(),
 		);
-		const add$ = new Subject();
-		setOnAdd(() => () => add$.next(undefined));
+		const add$ = createNotifier(setOnAdd);
+		const selectedTagChange$ = createMultiArgumentCallback(setOnTagChange);
+		const onTagInputChange$ = createMultiArgumentCallback(
+			registerOnTagInputChange,
+		);
 		const reset$: Observable<unknown> = defer(() => addResult$);
 		const name$ = nameChange$.pipe(
 			startWith(""),
@@ -97,49 +124,131 @@ export default function Accounting() {
 			map((list) => list.getItemsList()),
 			share(),
 		);
+		const selectedTags$ = selectedTagChange$.pipe(
+			map(([, selected]) => selected.filter((x) => !x.create)),
+			startWith([]),
+		);
+		const tagKeyword$ = onTagInputChange$.pipe(map(([, keyword]) => keyword));
+		const completeResults$ = tagKeyword$.pipe(
+			startWith(""),
+			switchMap((keyword) => {
+				const search = new TagSearch();
+				search.setKeyword(keyword);
+				return accountingService.completeTag(search);
+			}),
+			share(),
+		);
+		const tagMissing$ = completeResults$.pipe(
+			withLatestFrom(tagKeyword$),
+			combineLatestWith(
+				defer(() => createTagResult$).pipe(startWith(undefined)),
+			),
+			map(([[list, keyword]]) =>
+				list
+					.getTagsList()
+					.map((t) => t.getName())
+					.indexOf(keyword) === -1
+					? keyword
+					: undefined,
+			),
+			startWith(undefined),
+		);
+		const tagOptions$ = completeResults$.pipe(
+			map((list) =>
+				list.getTagsList().map((tag) => ({ label: tag.getName() })),
+			),
+			combineLatestWith(tagMissing$),
+			map(([list, missing]) =>
+				missing
+					? [
+							...list,
+							{
+								label: `新增標籤"${missing}"`,
+								create: missing,
+							},
+						]
+					: list,
+			),
+		);
+		const tagToCreate$ = selectedTagChange$.pipe(
+			map(
+				([, selected]) =>
+					selected.map(({ create }) => create).filter(Boolean) as string[],
+			),
+		);
+		const createTagResult$ = tagToCreate$.pipe(
+			mergeMap((tags) =>
+				from(tags).pipe(
+					mergeMap((tag) => {
+						const newTag = new NewTag();
+						newTag.setName(tag);
+						return accountingService.createTag(newTag);
+					}),
+					toArray(),
+				),
+			),
+			share(),
+		);
 		name$.pipe(takeUntil(bye$)).subscribe(setName);
 		income$.pipe(takeUntil(bye$)).subscribe(setIncome);
 		expense$.pipe(takeUntil(bye$)).subscribe(setExpense);
 		items$.pipe(takeUntil(bye$)).subscribe(setItems);
+		selectedTags$.pipe(takeUntil(bye$)).subscribe(setSelectedTags);
+		tagOptions$.pipe(takeUntil(bye$)).subscribe(setTagOptions);
 		return () => bye$.next(undefined);
 	}, []);
 	return (
 		<Container>
 			<Grid container>
-				<Grid container gap={1} flexGrow={1}>
-					<TextField
-						label="項目"
-						value={name}
-						sx={{ fontSize: 40, flexGrow: 1 }}
-						className={styles.grow}
-						onChange={onNameChange}
-					/>
-					<TextField
-						label="支出"
-						value={expense}
-						sx={{ fontSize: 40, flexGrow: 1 }}
-						slotProps={{
-							htmlInput: {
-								sx: { textAlign: "end", color: "#e18b8b", fontWeight: 900 },
-							},
-						}}
-						onChange={onExpenseChange}
-					/>
-					<TextField
-						label="收入"
-						value={income}
-						sx={{ fontSize: 40, flexGrow: 1 }}
-						slotProps={{
-							htmlInput: {
-								sx: { textAlign: "end", color: "#56b56f", fontWeight: 900 },
-							},
-						}}
-						onChange={onIncomeChange}
-					/>
-					<Button color="primary" onClick={onAdd}>
-						<AddCircleOutlineIcon />
-						新增
-					</Button>
+				<Grid container gap={1} flexGrow={1} direction="column">
+					<Grid container gap={1} flexGrow={1}>
+						<TextField
+							label="項目"
+							value={name}
+							sx={{ fontSize: 40, flexGrow: 1 }}
+							className={styles.grow}
+							onChange={onNameChange}
+						/>
+						<TextField
+							label="支出"
+							value={expense}
+							sx={{ fontSize: 40, flexGrow: 1 }}
+							slotProps={{
+								htmlInput: {
+									sx: { textAlign: "end", color: "#e18b8b", fontWeight: 900 },
+								},
+							}}
+							onChange={onExpenseChange}
+						/>
+						<TextField
+							label="收入"
+							value={income}
+							sx={{ fontSize: 40, flexGrow: 1 }}
+							slotProps={{
+								htmlInput: {
+									sx: { textAlign: "end", color: "#56b56f", fontWeight: 900 },
+								},
+							}}
+							onChange={onIncomeChange}
+						/>
+						<Button color="primary" onClick={onAdd}>
+							<AddCircleOutlineIcon />
+							新增
+						</Button>
+					</Grid>
+					<FormControl>
+						<InputLabel></InputLabel>
+						<Autocomplete
+							multiple
+							renderInput={(params) => (
+								<TextField {...params} placeholder="標籤" />
+							)}
+							value={selectedTags}
+							options={tagOptions}
+							onChange={onTagChange}
+							onInputChange={onTagInputChange}
+						/>
+					</FormControl>
 				</Grid>
 				<Table>
 					<TableHead>

@@ -29,6 +29,14 @@ export function useSubject<T = undefined>(): [
 	return [subject, (x: T) => subject.next(x)];
 }
 
+export function createNotifier(
+	updateDispatch: Dispatch<SetStateAction<(() => void) | undefined>>,
+) {
+	const event$ = new Subject();
+	updateDispatch(() => () => event$.next(undefined));
+	return event$;
+}
+
 export function createCallback<T>(
 	updateDispatch: Dispatch<SetStateAction<((event: T) => void) | undefined>>,
 ): Observable<T> {
