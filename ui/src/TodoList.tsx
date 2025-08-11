@@ -22,6 +22,7 @@ import {
 } from "rxjs";
 import { TodolistClient } from "./proto/TodolistServiceClientPb";
 import { NewTask, type Task, TaskUpdate } from "./proto/todolist_pb";
+import { createCallback, createMultiArgumentCallback } from "./rxjsutils";
 import TodoTask from "./TodoTask";
 
 export default function TodoList() {
@@ -35,15 +36,10 @@ export default function TodoList() {
 	useEffect(() => {
 		const todoService = new TodolistClient("/api");
 		const bye$ = new Subject();
-		const taskNameInput$ = new Subject<FormEvent>();
-		const addTask$ = new Subject<MouseEvent>();
-		const taskCompletedChange$: Subject<[id: string, completed: boolean]> =
-			new Subject();
-		setOnTaskNameInput(() => (event: FormEvent) => taskNameInput$.next(event));
-		setOnAddTask(() => (event: MouseEvent) => addTask$.next(event));
-		setOnTaskCompletedChange(
-			() => (id: string, completed?: boolean) =>
-				taskCompletedChange$.next([id, completed ?? false]),
+		const taskNameInput$ = createCallback(setOnTaskNameInput);
+		const addTask$ = createCallback(setOnAddTask);
+		const taskCompletedChange$ = createMultiArgumentCallback(
+			setOnTaskCompletedChange,
 		);
 
 		const taskName$: Observable<string> = taskNameInput$.pipe(

@@ -9,6 +9,7 @@ message NewItem {
   string name = 1;
   string income = 2;
   string expense = 3;
+  repeated string tags = 4;
 }
 
 message Item {
@@ -23,7 +24,26 @@ message ItemList {
   repeated Item items = 1;
 }
 
+message TagSearch {
+  string keyword = 1;
+}
+
+message Tag {
+  string id = 1;
+  string name = 2;
+}
+
+message TagList {
+  repeated Tag tags = 1;
+}
+
+message NewTag {
+  string name = 1;
+}
+
 service Accounting {
   rpc List(google.protobuf.Empty) returns (ItemList) {}
   rpc Add(NewItem) returns (Item) {}
+  rpc CompleteTag(TagSearch) returns (TagList) {}
+  rpc CreateTag(NewTag) returns (Tag) {}
 }
