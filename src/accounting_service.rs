@@ -55,6 +55,7 @@ order by accounting_items.created_at desc", claims.sub)
             name,
             income,
             expense,
+            tags,
         } = request.into_inner();
         let Ok(income) = income.parse::<BigDecimal>() else {
             return Err(Status::invalid_argument("income isn't numeric"));
@@ -62,23 +63,45 @@ order by accounting_items.created_at desc", claims.sub)
         let Ok(expense) = expense.parse::<BigDecimal>() else {
             return Err(Status::invalid_argument("expense isn't numeric"));
         };
-        match sqlx::query!("insert into accounting_items (user_id, name, income, expense)
+        let Ok(mut tx) = self.state.database.begin().await else {
+            return Err(Status::internal(String::new()));
+        };
+        let item = match sqlx::query!("insert into accounting_items (user_id, name, income, expense)
 select users.id, $1, $2, $3
 from users
 where users.google_sub = $4
-returning accounting_items.id, accounting_items.name, accounting_items.income, accounting_items.expense, accounting_items.created_at", name, income, expense, claims.sub).fetch_one(&self.state.database)
+returning accounting_items.id, accounting_items.name, accounting_items.income, accounting_items.expense, accounting_items.created_at", name, income, expense, claims.sub)
+            .fetch_one(&mut *tx)
             .await {
-            Ok(record) => Ok(Response::new(Item {
-                id: record.id.to_string(),
-                name: record.name.unwrap_or_default(),
-                income: record.income.to_string(),
-                expense: record.expense.to_string(),
-                created_at: record.created_at.map(to_proto_timestamp)
-            })),
+            Ok(record) => Ok(record),
                 Err(_err) => {
                 Err(Status::internal(String::new()))
             },
-        }
+        }?;
+        let tag_id: Vec<i32> = tags.iter().filter_map(|x| x.parse().ok()).collect();
+        sqlx::query!(
+            "insert into accounting_item_tags (tag_id, accounting_item_id)
+select tags.id, $1
+from tags
+join users on users.id = tags.user_id
+where users.google_sub = $2 and tags.id = any($3)",
+            item.id,
+            claims.sub,
+            &tag_id[..],
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(|_err| Status::internal(String::new()))?;
+        tx.commit()
+            .await
+            .map_err(|_err| Status::internal(String::new()))?;
+        Ok(Response::new(Item {
+            id: item.id.to_string(),
+            name: item.name.unwrap_or_default(),
+            income: item.income.to_string(),
+            expense: item.expense.to_string(),
+            created_at: item.created_at.map(to_proto_timestamp),
+        }))
     }
     async fn complete_tag(&self, request: Request<TagSearch>) -> tonic::Result<Response<TagList>> {
         let claims = get_claims(&request).await?;

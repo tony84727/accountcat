@@ -59,6 +59,10 @@ interface TagOption {
 	create?: string;
 }
 
+function isNotEmpty<T>(x: T | undefined): x is T {
+	return Boolean(x);
+}
+
 export default function Accounting() {
 	const [onNameChange, setOnNameChange] =
 		useState<TextFieldChangeEventHandler>();
@@ -107,13 +111,25 @@ export default function Accounting() {
 			startWith("0"),
 			mergeWith(reset$.pipe(map(() => "0"))),
 		);
+		const selectedTags$ = selectedTagChange$.pipe(
+			map(([, selected]) => selected.filter((x) => !x.create)),
+			combineLatestWith(
+				defer(() => createTagResult$).pipe(startWith(undefined)),
+			),
+			map(([selected, newTag]) => [
+				...selected,
+				...(newTag ?? []).map((t) => ({ label: t.getName(), id: t.getId() })),
+			]),
+			startWith([]),
+		);
 		const addResult$ = add$.pipe(
-			withLatestFrom(name$, expense$, income$),
-			switchMap(([_, name, expense, income]) => {
+			withLatestFrom(name$, expense$, income$, selectedTags$),
+			switchMap(([_, name, expense, income, tags]) => {
 				const newItem = new NewItem();
 				newItem.setName(name);
 				newItem.setExpense(expense);
 				newItem.setIncome(income);
+				newItem.setTagsList(tags.map((x) => x.id).filter(isNotEmpty));
 				return accountingService.add(newItem);
 			}),
 			share(),
@@ -124,12 +140,9 @@ export default function Accounting() {
 			map((list) => list.getItemsList()),
 			share(),
 		);
-		const selectedTags$ = selectedTagChange$.pipe(
-			map(([, selected]) => selected.filter((x) => !x.create)),
-			startWith([]),
-		);
 		const tagKeyword$ = onTagInputChange$.pipe(map(([, keyword]) => keyword));
 		const completeResults$ = tagKeyword$.pipe(
+			mergeWith(defer(() => createTagResult$).pipe(map(() => ""))),
 			startWith(""),
 			switchMap((keyword) => {
 				const search = new TagSearch();
@@ -140,10 +153,7 @@ export default function Accounting() {
 		);
 		const tagMissing$ = completeResults$.pipe(
 			withLatestFrom(tagKeyword$),
-			combineLatestWith(
-				defer(() => createTagResult$).pipe(startWith(undefined)),
-			),
-			map(([[list, keyword]]) =>
+			map(([list, keyword]) =>
 				list
 					.getTagsList()
 					.map((t) => t.getName())
@@ -155,7 +165,9 @@ export default function Accounting() {
 		);
 		const tagOptions$ = completeResults$.pipe(
 			map((list) =>
-				list.getTagsList().map((tag) => ({ label: tag.getName() })),
+				list
+					.getTagsList()
+					.map((tag) => ({ id: tag.getId(), label: tag.getName() })),
 			),
 			combineLatestWith(tagMissing$),
 			map(([list, missing]) =>
