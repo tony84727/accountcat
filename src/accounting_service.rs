@@ -6,7 +6,9 @@ use tracing::error;
 
 use crate::{
     auth::get_claims,
-    idl::accounting::{Item, ItemList, NewItem, accounting_server::Accounting},
+    idl::accounting::{
+        Item, ItemList, NewItem, NewTag, Tag, TagList, TagSearch, accounting_server::Accounting,
+    },
     protobufutils::to_proto_timestamp,
     server::ServerState,
 };
@@ -73,9 +75,54 @@ returning accounting_items.id, accounting_items.name, accounting_items.income, a
                 expense: record.expense.to_string(),
                 created_at: record.created_at.map(to_proto_timestamp)
             })),
-                Err(err) => {
+                Err(_err) => {
                 Err(Status::internal(String::new()))
             },
+        }
+    }
+    async fn complete_tag(&self, request: Request<TagSearch>) -> tonic::Result<Response<TagList>> {
+        let claims = get_claims(&request).await?;
+        let TagSearch { keyword } = request.into_inner();
+        match sqlx::query!(
+            r#"select tags.id, tags.name
+from tags
+join users on users.id = tags.user_id
+where users.google_sub = $1 and tags.name like $2 escape '\'"#,
+            claims.sub,
+            format!("%{}%", keyword.replace("%", "\\%"))
+        )
+        .map(|r| Tag {
+            id: r.id.to_string(),
+            name: r.name,
+        })
+        .fetch_all(&self.state.database)
+        .await
+        {
+            Ok(tags) => Ok(Response::new(TagList { tags })),
+            Err(_err) => Err(Status::internal(String::new())),
+        }
+    }
+
+    async fn create_tag(&self, request: Request<NewTag>) -> tonic::Result<Response<Tag>> {
+        let claims = get_claims(&request).await?;
+        let NewTag { name } = request.into_inner();
+        match sqlx::query!(
+            "insert into tags (user_id, name)
+select users.id, $1
+from users
+where users.google_sub = $2
+returning tags.id, tags.name",
+            name,
+            claims.sub
+        )
+        .fetch_one(&self.state.database)
+        .await
+        {
+            Ok(record) => Ok(Response::new(Tag {
+                id: record.id.to_string(),
+                name: record.name,
+            })),
+            Err(_err) => Err(Status::internal(String::new())),
         }
     }
 }
