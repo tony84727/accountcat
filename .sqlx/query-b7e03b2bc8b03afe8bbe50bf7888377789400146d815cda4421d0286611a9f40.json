@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into accounting_item_tags (tag_id, accounting_item_id)\nselect tags.id, $1\nfrom tags\njoin users on users.id = tags.user_id\nwhere users.google_sub = $2 and tags.id = any($3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Int4Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b7e03b2bc8b03afe8bbe50bf7888377789400146d815cda4421d0286611a9f40"
+}

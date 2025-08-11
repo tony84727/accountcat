@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select tags.id, tags.name\nfrom tags\njoin users on users.id = tags.user_id\nwhere users.google_sub = $1 and tags.name like $2 escape '\\'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b06fdb0dfff0d0df05a75f256640dc6a42580db9c9be5d8f194a741efe945bc9"
+}
