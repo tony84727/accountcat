@@ -9,6 +9,7 @@ message NewItem {
   string name = 1;
   string income = 2;
   string expense = 3;
+  repeated string tags = 4;
 }
 
 message Item {
