@@ -1,0 +1,6 @@
+/target
+/server.toml
+/.git
+/.github
+/ui/node_modules
+/ui/dist
