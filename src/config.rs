@@ -31,18 +31,22 @@ pub struct Login {
 }
 
 pub fn load() -> Result<Config, LoadError> {
-    let config_file: ConfigFile =
-        toml::from_str(&std::fs::read_to_string("server.toml").map_err(LoadError::IO)?)
-            .map_err(LoadError::Parse)?;
+    let config_file: Option<ConfigFile> = std::fs::read_to_string("server.toml")
+        .ok()
+        .and_then(|content| toml::from_str(&content).ok());
+    let (login, database) = match config_file {
+        Some(database) => (database.login, database.database),
+        None => (None, None),
+    };
     let login: Login = std::env::var("GOOGLE_LOGIN_CLIENT_ID")
         .ok()
         .map(|client_id| Login {
             client_id: SecretString::from(client_id),
         })
-        .or(config_file.login)
+        .or(login)
         .ok_or(LoadError::MissingEssentialValue("login.client_id"))?;
     let database = Database::from_env()
-        .or(config_file.database)
+        .or(database)
         .or(Some(Default::default()));
     Ok(Config { login, database })
 }
