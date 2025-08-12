@@ -37,7 +37,7 @@ async fn init_state() -> ServerState {
         .expect("init jwt verifier");
     ServerState {
         jwt_verify: verifier,
-        database: database.unwrap_or_default().into(),
+        database: database.into(),
     }
 }
 
