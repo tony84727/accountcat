@@ -1,5 +1,8 @@
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::PgConnectOptions;
+use sqlx::{
+    PgPool,
+    postgres::{PgConnectOptions, PgPoolOptions},
+};
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
@@ -47,5 +50,12 @@ impl From<Database> for PgConnectOptions {
             options = options.password(&password);
         }
         options
+    }
+}
+
+impl From<Database> for PgPool {
+    fn from(value: Database) -> Self {
+        let connection = PgConnectOptions::from(value);
+        PgPoolOptions::new().connect_lazy_with(connection)
     }
 }
