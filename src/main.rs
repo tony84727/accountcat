@@ -7,18 +7,13 @@ struct Args {
     subcommand: Option<Command>,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Default)]
 enum Command {
     /// run accountcat server
+    #[default]
     Server,
     /// run database migration
     Migrate,
-}
-
-impl Default for Command {
-    fn default() -> Self {
-        Command::Server
-    }
 }
 
 #[tokio::main]
