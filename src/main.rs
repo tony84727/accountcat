@@ -1,4 +1,4 @@
-use accountcat::server;
+use accountcat::{config, server};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -14,6 +14,8 @@ enum Command {
     Server,
     /// run database migration
     Migrate,
+    /// Dump current server settings
+    Settings,
 }
 
 #[tokio::main]
@@ -22,5 +24,6 @@ async fn main() {
     match args.subcommand.unwrap_or_default() {
         Command::Server => server::main().await,
         Command::Migrate => accountcat::migration::run().await,
+        Command::Settings => config::print_settings(),
     }
 }
