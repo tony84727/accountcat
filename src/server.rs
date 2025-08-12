@@ -2,10 +2,7 @@ use std::sync::Arc;
 
 use axum::Router;
 use http::{HeaderName, HeaderValue};
-use sqlx::{
-    PgPool,
-    postgres::{PgConnectOptions, PgPoolOptions},
-};
+use sqlx::PgPool;
 use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
 use tower_http::{
@@ -38,10 +35,9 @@ async fn init_state() -> ServerState {
     let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, login.client_id)
         .await
         .expect("init jwt verifier");
-    let connection = PgConnectOptions::from(database.unwrap_or_default());
     ServerState {
         jwt_verify: verifier,
-        database: PgPoolOptions::new().connect_lazy_with(connection),
+        database: database.unwrap_or_default().into(),
     }
 }
 
