@@ -43,9 +43,21 @@ impl From<Database> for PgConnectOptions {
             database,
         } = value;
         let mut options = PgConnectOptions::new()
-            .host(&host.unwrap_or_else(|| String::from("localhost")))
-            .username(&user.unwrap_or_else(|| String::from("postgres")))
-            .database(&database.unwrap_or_else(|| String::from("accountcat")));
+            .host(
+                &host
+                    .or_else(|| std::env::var("DATABASE_HOST").ok())
+                    .unwrap_or_else(|| String::from("localhost")),
+            )
+            .username(
+                &user
+                    .or_else(|| std::env::var("DATABASE_USER").ok())
+                    .unwrap_or_else(|| String::from("postgres")),
+            )
+            .database(
+                &database
+                    .or_else(|| std::env::var("DATABASE_NAME").ok())
+                    .unwrap_or_else(|| String::from("accountcat")),
+            );
         if let Some(password) = password {
             options = options.password(&password);
         }
