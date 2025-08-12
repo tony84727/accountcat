@@ -1,3 +1,5 @@
+use crate::secret_se::{serialize_optional_secret, serialize_secret};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 use sqlx::{
     PgPool,
@@ -10,9 +12,16 @@ pub struct Config {
     pub database: Option<Database>,
 }
 
+impl Config {
+    pub fn dump(&self) -> String {
+        toml::to_string_pretty(self).unwrap()
+    }
+}
+
 #[derive(Serialize, Deserialize)]
 pub struct Login {
-    pub client_id: String,
+    #[serde(serialize_with = "serialize_secret")]
+    pub client_id: SecretString,
 }
 
 pub fn load() -> Result<Config, LoadError> {
@@ -30,7 +39,8 @@ pub enum LoadError {
 pub struct Database {
     host: Option<String>,
     user: Option<String>,
-    password: Option<String>,
+    #[serde(serialize_with = "serialize_optional_secret")]
+    password: Option<SecretString>,
     database: Option<String>,
 }
 
@@ -47,7 +57,7 @@ impl From<Database> for PgConnectOptions {
             .username(&user.unwrap_or_else(|| String::from("postgres")))
             .database(&database.unwrap_or_else(|| String::from("accountcat")));
         if let Some(password) = password {
-            options = options.password(&password);
+            options = options.password(password.expose_secret());
         }
         options
     }
@@ -58,4 +68,8 @@ impl From<Database> for PgPool {
         let connection = PgConnectOptions::from(value);
         PgPoolOptions::new().connect_lazy_with(connection)
     }
+}
+pub fn print_settings() {
+    let config = load().unwrap();
+    println!("{}", config.dump());
 }

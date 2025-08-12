@@ -1,15 +1,16 @@
 use jsonwebtoken::{DecodingKey, Validation, decode, decode_header, jwk::JwkSet};
+use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_JWK_URL: &str = "https://www.googleapis.com/oauth2/v3/certs";
 
 pub struct JwtVerifier {
     jwk_sets: JwkSet,
-    client_id: String,
+    client_id: SecretString,
 }
 
 impl JwtVerifier {
-    pub async fn new(jwk_url: &str, client_id: String) -> Result<Self, InitError> {
+    pub async fn new(jwk_url: &str, client_id: SecretString) -> Result<Self, InitError> {
         let jwk_sets: JwkSet = reqwest::get(jwk_url)
             .await
             .map_err(InitError::LoadJwk)?
@@ -30,7 +31,7 @@ impl JwtVerifier {
         let mut last_error = None;
         for k in self.jwk_sets.keys.iter() {
             let mut validation = Validation::new(header.alg);
-            validation.set_audience(&[&self.client_id]);
+            validation.set_audience(&[self.client_id.expose_secret()]);
             match decode::<Claims>(token, &DecodingKey::from_jwk(k)?, &validation) {
                 Ok(data) => {
                     return Ok(data.claims);

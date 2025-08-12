@@ -5,6 +5,7 @@ pub mod idl;
 pub mod jwtutils;
 pub mod migration;
 mod protobufutils;
+mod secret_se;
 pub mod server;
 mod todolist_service;
 mod user_service;
