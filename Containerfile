@@ -12,10 +12,10 @@ RUN apk --no-cache add build-base openssl-dev openssl-libs-static protoc protobu
 WORKDIR /project
 ENV SQLX_OFFLINE=true
 ADD . .
-RUN cargo build --release
+RUN --mount=type=cache,target=/root/.cargo --mount=type=cache,target=/project/target cargo build --release && mkdir -p /project/bin && cp /project/target/release/accountcat /project/bin/accountcat
 
 FROM alpine:3.21
 WORKDIR /opt/accountcat
-COPY --from=compile_server /project/target/release/accountcat .
+COPY --from=compile_server /project/bin/accountcat .
 COPY --from=build_frontend /project/dist ./ui/dist
 CMD ["/opt/accountcat/accountcat", "server"]
