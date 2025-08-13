@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use axum::Router;
-use http::{HeaderName, HeaderValue};
+use http::HeaderName;
 use sqlx::PgPool;
 use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
@@ -15,6 +15,7 @@ use tower_sessions_sqlx_store::PostgresStore;
 use crate::{
     accounting_service,
     config::{self, Config},
+    csp::build_csp,
     idl::{
         accounting::accounting_server::AccountingServer, todolist::todolist_server::TodolistServer,
         user::user_server::UserServer,
@@ -47,9 +48,7 @@ pub async fn main() {
     let asset_service = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::overriding(
             HeaderName::from_bytes(b"Content-Security-Policy").unwrap(),
-            HeaderValue::from_static(
-                "script-src 'self' https://accounts.google.com/gsi/client;default-src 'self' 'unsafe-inline';",
-            ),
+            build_csp(),
         ))
         .service(serve_ui);
     let server_state = Arc::new(init_state().await);
