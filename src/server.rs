@@ -15,7 +15,7 @@ use tower_sessions_sqlx_store::PostgresStore;
 use crate::{
     accounting_service,
     config::{self, Config},
-    csp::build_csp,
+    csp::{NonceLayer, build_csp},
     idl::{
         accounting::accounting_server::AccountingServer, todolist::todolist_server::TodolistServer,
         user::user_server::UserServer,
@@ -44,7 +44,10 @@ async fn init_state() -> ServerState {
 
 pub async fn main() {
     tracing_subscriber::fmt::init();
-    let serve_ui = ServeDir::new("ui/dist").fallback(ServeFile::new("ui/dist/index.html"));
+    let index = ServiceBuilder::new()
+        .layer(NonceLayer)
+        .service(ServeFile::new("ui/dist/index.html"));
+    let serve_ui = ServeDir::new("ui/dist").fallback(index);
     let asset_service = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::overriding(
             HeaderName::from_bytes(b"Content-Security-Policy").unwrap(),
