@@ -8,6 +8,7 @@ axum = "0.8.4"
 clap = { version = "4.5.44", features = ["derive"] }
 http = "1.3.1"
 jsonwebtoken = "9.3.1"
+pin-project-lite = "0.2.16"
 prost = "0.13.5"
 prost-types = "0.13.5"
 reqwest = { version = "0.12.22", features = ["json"] }

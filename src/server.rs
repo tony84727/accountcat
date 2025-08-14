@@ -15,7 +15,7 @@ use tower_sessions_sqlx_store::PostgresStore;
 use crate::{
     accounting_service,
     config::{self, Config},
-    csp::{NonceLayer, build_csp},
+    csp::{CspLayer, NonceLayer, build_csp},
     idl::{
         accounting::accounting_server::AccountingServer, todolist::todolist_server::TodolistServer,
         user::user_server::UserServer,
@@ -44,15 +44,15 @@ async fn init_state() -> ServerState {
 
 pub async fn main() {
     tracing_subscriber::fmt::init();
-    let index = ServiceBuilder::new()
-        .layer(NonceLayer)
-        .service(ServeFile::new("ui/dist/index.html"));
+    let index = ServeFile::new("ui/dist/index.html");
     let serve_ui = ServeDir::new("ui/dist").fallback(index);
     let asset_service = ServiceBuilder::new()
-        .layer(SetResponseHeaderLayer::overriding(
-            HeaderName::from_bytes(b"Content-Security-Policy").unwrap(),
-            build_csp(),
+        .layer(SetResponseHeaderLayer::if_not_present(
+            HeaderName::from_static("content-security-policy"),
+            build_csp(None),
         ))
+        .layer(NonceLayer)
+        .layer(CspLayer)
         .service(serve_ui);
     let server_state = Arc::new(init_state().await);
     let session_store = PostgresStore::new(server_state.database.clone());
