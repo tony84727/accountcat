@@ -1,14 +1,11 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::Router;
-use http::HeaderName;
+use http::header;
 use sqlx::PgPool;
 use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
-use tower_http::{
-    services::{ServeDir, ServeFile},
-    set_header::SetResponseHeaderLayer,
-};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
 
@@ -21,6 +18,7 @@ use crate::{
         user::user_server::UserServer,
     },
     jwtutils::{self, JwtVerifier},
+    serve_dist::ServeDist,
     todolist_service, user_service,
 };
 
@@ -44,11 +42,10 @@ async fn init_state() -> ServerState {
 
 pub async fn main() {
     tracing_subscriber::fmt::init();
-    let index = ServeFile::new("ui/dist/index.html");
-    let serve_ui = ServeDir::new("ui/dist").fallback(index);
+    let serve_ui = ServeDist::new(PathBuf::from("ui/dist"));
     let asset_service = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::if_not_present(
-            HeaderName::from_static("content-security-policy"),
+            header::CONTENT_SECURITY_POLICY,
             build_csp(None),
         ))
         .layer(NonceLayer)

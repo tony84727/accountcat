@@ -1,3 +1,4 @@
+use base64::{Engine, prelude::BASE64_URL_SAFE_NO_PAD};
 use http::{HeaderName, HeaderValue, Request, Response};
 use pin_project_lite::pin_project;
 use std::task::{Poll, ready};
@@ -8,13 +9,11 @@ pub fn build_csp(nonce: Option<&str>) -> HeaderValue {
         .map(|nonce| format!("'nonce-{nonce}'"))
         .unwrap_or_default();
     let directives = [
-        format!("script-src 'self' https://accounts.google.com/gsi/client {nonce}"),
-        format!(
-            "style-src 'self' https://accounts.google.com/gsi/style 'sha256-ZAdCRDnStGum6I/Iqtz5uunKn4HysAVC/9iXTVObQr8=' {nonce}"
-        ),
+        format!("script-src {nonce} 'strict-dynamic'"),
+        format!("style-src 'self' https://accounts.google.com/gsi/style {nonce}"),
         String::from("connect-src 'self' https://accounts.google.com/gsi/status"),
-        format!("frame-src https://accounts.google.com/gsi {nonce}"),
-        String::from("default-src 'self' 'unsafe-inline'"),
+        format!("frame-src https://accounts.google.com/gsi/iframe/select {nonce}"),
+        String::from("default-src 'self'"),
     ];
     HeaderValue::from_str(&(directives.join("; ") + ";")).unwrap()
 }
@@ -34,7 +33,7 @@ pub struct NonceService<S> {
 }
 
 #[derive(Clone)]
-struct Nonce(uuid::Uuid);
+pub(crate) struct Nonce(pub(crate) String);
 
 impl<S, T> Service<Request<T>> for NonceService<S>
 where
@@ -55,7 +54,8 @@ where
 
     fn call(&mut self, mut req: Request<T>) -> Self::Future {
         let extensions = req.extensions_mut();
-        extensions.insert(Nonce(uuid::Uuid::new_v4()));
+        let nonce = BASE64_URL_SAFE_NO_PAD.encode(uuid::Uuid::new_v4());
+        extensions.insert(Nonce(nonce));
         self.inner.call(req)
     }
 }

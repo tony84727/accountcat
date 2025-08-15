@@ -7,9 +7,11 @@ name = "accountcat"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "base64",
  "clap",
  "http",
  "jsonwebtoken",
+ "mime_guess",
  "pin-project-lite",
  "prost",
  "prost-types",
