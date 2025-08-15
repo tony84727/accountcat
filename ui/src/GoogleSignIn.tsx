@@ -19,6 +19,7 @@ export default function GoogleSignIn(props: Props) {
 		const clientScriptTag = document.createElement("script");
 		clientScriptTag.src = "https://accounts.google.com/gsi/client";
 		clientScriptTag.async = true;
+		clientScriptTag.nonce = window.__webpack_nonce__;
 		clientScriptTag.onload = () => {
 			google.accounts.id.initialize({
 				client_id: import.meta.env.PUBLIC_GOOGLE_CLIENT_ID,

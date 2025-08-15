@@ -1,25 +1,24 @@
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use axum::Router;
-use http::{HeaderName, HeaderValue};
+use http::header;
 use sqlx::PgPool;
 use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
-use tower_http::{
-    services::{ServeDir, ServeFile},
-    set_header::SetResponseHeaderLayer,
-};
+use tower_http::set_header::SetResponseHeaderLayer;
 use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
     accounting_service,
     config::{self, Config},
+    csp::{CspLayer, NonceLayer, build_csp},
     idl::{
         accounting::accounting_server::AccountingServer, todolist::todolist_server::TodolistServer,
         user::user_server::UserServer,
     },
     jwtutils::{self, JwtVerifier},
+    serve_dist::ServeDist,
     todolist_service, user_service,
 };
 
@@ -43,14 +42,14 @@ async fn init_state() -> ServerState {
 
 pub async fn main() {
     tracing_subscriber::fmt::init();
-    let serve_ui = ServeDir::new("ui/dist").fallback(ServeFile::new("ui/dist/index.html"));
+    let serve_ui = ServeDist::new(PathBuf::from("ui/dist"));
     let asset_service = ServiceBuilder::new()
-        .layer(SetResponseHeaderLayer::overriding(
-            HeaderName::from_bytes(b"Content-Security-Policy").unwrap(),
-            HeaderValue::from_static(
-                "script-src 'self' https://accounts.google.com/gsi/client;default-src 'self' 'unsafe-inline';",
-            ),
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CONTENT_SECURITY_POLICY,
+            build_csp(None),
         ))
+        .layer(NonceLayer)
+        .layer(CspLayer)
         .service(serve_ui);
     let server_state = Arc::new(init_state().await);
     let session_store = PostgresStore::new(server_state.database.clone());

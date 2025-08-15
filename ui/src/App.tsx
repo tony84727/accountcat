@@ -1,6 +1,8 @@
 import "normalize.css";
+import createCache from "@emotion/cache";
+import { CacheProvider } from "@emotion/react";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
-import { lazy, useEffect, useState } from "react";
+import { lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router";
 import { defer, from, Subject } from "rxjs";
 import {
@@ -26,6 +28,15 @@ const App = () => {
 	const [onLogin$, onLogin] = useSubject<Response>();
 	const [promptLogin, setPromptLogin] = useState(false);
 	const [username, setUsername] = useState<string>();
+	const emotionCache = useMemo(
+		() =>
+			createCache({
+				key: "mui",
+				nonce: window.__webpack_nonce__,
+				prepend: true,
+			}),
+		[],
+	);
 	useEffect(() => {
 		const username$ = defer(() => userClient.getName(new Empty())).pipe(
 			map((response) => response.getName()),
@@ -53,15 +64,21 @@ const App = () => {
 		return () => bye$.next(undefined);
 	}, [onLogin$]);
 	return (
-		<BrowserRouter>
-			<div>
-				<Nav username={username} onLogin={onLogin} promptLogin={promptLogin} />
-			</div>
-			<Routes>
-				<Route path="/todo/*" element={<TodoList />} />
-				<Route path="/accounting/*" element={<Accounting />} />
-			</Routes>
-		</BrowserRouter>
+		<CacheProvider value={emotionCache}>
+			<BrowserRouter>
+				<div>
+					<Nav
+						username={username}
+						onLogin={onLogin}
+						promptLogin={promptLogin}
+					/>
+				</div>
+				<Routes>
+					<Route path="/todo/*" element={<TodoList />} />
+					<Route path="/accounting/*" element={<Accounting />} />
+				</Routes>
+			</BrowserRouter>
+		</CacheProvider>
 	);
 };
 

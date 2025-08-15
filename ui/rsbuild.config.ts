@@ -8,6 +8,9 @@ export default defineConfig({
 	plugins: [pluginReact(), pluginSass()],
 	html: {
 		title: "AccountCat",
+		meta: {
+			nonce: "__CSP_NONCE__",
+		},
 	},
 	source: {
 		define: publicVars,
@@ -18,8 +21,6 @@ export default defineConfig({
 		},
 	},
 	security: {
-		sri: {
-			enable: "auto",
-		},
+		nonce: "__CSP_NONCE__",
 	},
 });
