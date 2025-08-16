@@ -2,9 +2,9 @@ name: Build container image
 
 on:
   pull_request:
-    bench: ['main']
+    branches: ['main']
   push:
-    branch: ['main']
+    branches: ['main']
     tags: v*
 
 jobs:
