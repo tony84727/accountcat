@@ -1,6 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use axum::Router;
+use clap::Parser;
 use http::header;
 use sqlx::PgPool;
 use tonic_web::GrpcWebLayer;
@@ -39,9 +40,23 @@ async fn init_state(Config { login, database }: &Config) -> ServerState {
     }
 }
 
-pub async fn main() {
+#[derive(Parser, Default)]
+pub struct ServerArg {
+    /// Run database migration when starting the server
+    #[arg(short, long)]
+    auto_migrate: bool,
+}
+
+pub async fn main(arg: &ServerArg) {
     tracing_subscriber::fmt::init();
     let loaded_config = config::load().expect("load server config");
+    let server_state = Arc::new(init_state(&loaded_config).await);
+    if arg.auto_migrate {
+        sqlx::migrate!("./migrations")
+            .run(&server_state.database)
+            .await
+            .unwrap();
+    }
     let serve_ui = ServeDist::new(PathBuf::from("ui/dist"));
     let asset_service = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -51,7 +66,6 @@ pub async fn main() {
         .layer(NonceLayer)
         .layer(CspLayer)
         .service(serve_ui);
-    let server_state = Arc::new(init_state(&loaded_config).await);
     let session_store = PostgresStore::new(server_state.database.clone());
     let session_layer = SessionManagerLayer::new(session_store);
     let user_api = UserServer::new(user_service::UserApi::new(
