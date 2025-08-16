@@ -1,21 +1,26 @@
 use std::sync::Arc;
 
+use secrecy::{ExposeSecret, SecretString};
 use tonic::{Request, Response};
 use tower_sessions::Session;
 
 use crate::{
-    idl::user::{LoginRequest, Profile, user_server::User},
+    idl::user::{LoginRequest, Param, Profile, user_server::User},
     jwtutils::Claims,
     server::{SESSION_KEY_CLAIMS, ServerState},
 };
 
 pub struct UserApi {
     state: Arc<ServerState>,
+    google_client_id: SecretString,
 }
 
 impl UserApi {
-    pub fn new(state: Arc<ServerState>) -> Self {
-        Self { state }
+    pub fn new(state: Arc<ServerState>, google_client_id: SecretString) -> Self {
+        Self {
+            state,
+            google_client_id,
+        }
     }
 }
 
@@ -76,6 +81,11 @@ impl User for UserApi {
 
         Ok(tonic::Response::new(Profile {
             name: Some(claims.name),
+        }))
+    }
+    async fn get_param(&self, _request: Request<()>) -> tonic::Result<tonic::Response<Param>> {
+        Ok(tonic::Response::new(Param {
+            google_client_id: self.google_client_id.expose_secret().into(),
         }))
     }
 }

@@ -1,8 +1,6 @@
-import { defineConfig, loadEnv } from "@rsbuild/core";
+import { defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { pluginSass } from "@rsbuild/plugin-sass";
-
-const { publicVars } = loadEnv();
 
 export default defineConfig({
 	plugins: [pluginReact(), pluginSass()],
@@ -11,9 +9,6 @@ export default defineConfig({
 		meta: {
 			nonce: "__CSP_NONCE__",
 		},
-	},
-	source: {
-		define: publicVars,
 	},
 	server: {
 		proxy: {

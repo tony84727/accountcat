@@ -1,9 +1,12 @@
-import { useEffect, useRef } from "react";
+import { Empty } from "google-protobuf/google/protobuf/empty_pb";
+import { useEffect, useState } from "react";
+import { UserClient } from "./proto/UserServiceClientPb";
 
 export interface Response {
 	credential: string;
 }
 interface Props {
+	clientId: string;
 	loginCallback(response: Response): void;
 }
 
@@ -14,25 +17,26 @@ declare global {
 }
 
 export default function GoogleSignIn(props: Props) {
-	const button = useRef(null);
+	const [clientId, setClientId] = useState<string>();
 	useEffect(() => {
+		const userClient = new UserClient("/api");
+		userClient
+			.getParam(new Empty())
+			.then((param) => setClientId(param.getGoogleClientId()));
+	}, []);
+	useEffect(() => {
+		if (!clientId) {
+			return;
+		}
 		const clientScriptTag = document.createElement("script");
 		clientScriptTag.src = "https://accounts.google.com/gsi/client";
 		clientScriptTag.async = true;
 		clientScriptTag.nonce = window.__webpack_nonce__;
 		clientScriptTag.onload = () => {
 			google.accounts.id.initialize({
-				client_id: import.meta.env.PUBLIC_GOOGLE_CLIENT_ID,
+				client_id: clientId,
 				callback: props.loginCallback,
 			});
-			if (button.current) {
-				google.accounts.id.renderButton(button.current, {
-					theme: "outline",
-					size: "medium",
-					type: "standard",
-				});
-			}
-
 			google.accounts.id.prompt();
 			window.onGoogleLogin = (response) => {
 				props.loginCallback(response);
@@ -47,6 +51,6 @@ export default function GoogleSignIn(props: Props) {
 			clientScriptTag.remove();
 			delete window.onGoogleLogin;
 		};
-	}, [props.loginCallback]);
+	}, [props.loginCallback, clientId]);
 	return null;
 }

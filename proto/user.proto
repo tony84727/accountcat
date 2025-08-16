@@ -7,7 +7,12 @@ message LoginRequest { string token = 1; }
 
 message Profile { optional string name = 1; }
 
+message Param {
+  string google_client_id = 1;
+}
+
 service User {
+  rpc GetParam(google.protobuf.Empty) returns (Param) {}
   rpc GetName(google.protobuf.Empty) returns (Profile) {}
   rpc Login(LoginRequest) returns (Profile) {}
 }
