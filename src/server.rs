@@ -29,19 +29,19 @@ pub struct ServerState {
     pub jwt_verify: JwtVerifier,
 }
 
-async fn init_state() -> ServerState {
-    let Config { login, database } = config::load().expect("load server config");
-    let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, login.client_id)
+async fn init_state(Config { login, database }: &Config) -> ServerState {
+    let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, login.client_id.clone())
         .await
         .expect("init jwt verifier");
     ServerState {
         jwt_verify: verifier,
-        database: database.into(),
+        database: database.clone().into(),
     }
 }
 
 pub async fn main() {
     tracing_subscriber::fmt::init();
+    let loaded_config = config::load().expect("load server config");
     let serve_ui = ServeDist::new(PathBuf::from("ui/dist"));
     let asset_service = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::if_not_present(
@@ -51,10 +51,13 @@ pub async fn main() {
         .layer(NonceLayer)
         .layer(CspLayer)
         .service(serve_ui);
-    let server_state = Arc::new(init_state().await);
+    let server_state = Arc::new(init_state(&loaded_config).await);
     let session_store = PostgresStore::new(server_state.database.clone());
     let session_layer = SessionManagerLayer::new(session_store);
-    let user_api = UserServer::new(user_service::UserApi::new(server_state.clone()));
+    let user_api = UserServer::new(user_service::UserApi::new(
+        server_state.clone(),
+        loaded_config.login.client_id,
+    ));
     let todolist_api =
         TodolistServer::new(todolist_service::TodolistApi::new(server_state.clone()));
     let accounting_api =
