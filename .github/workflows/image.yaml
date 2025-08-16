@@ -1,8 +1,11 @@
 name: Build container image
 
 on:
+  pull_request:
+    bench: ['main']
   push:
     branch: ['main']
+    tags: v*
 
 jobs:
   build-and-push-image:
@@ -23,7 +26,9 @@ jobs:
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository}}/server
-          tags: type=ref,event=branch
+          tags: |
+            type=ref,event=pr
+            type=semver,pattern={{version}}
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
