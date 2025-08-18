@@ -7,11 +7,15 @@ on:
     branches: ['main']
     tags: v*
 
+env:
+  IMAGE: ghcr.io/${{ github.repository }}/server
+
 jobs:
   build-and-push-image:
     runs-on: ubuntu-latest
     permissions:
       packages: write
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -25,7 +29,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/${{ github.repository}}/server
+          images: ${{ env.IMAGE }}
           tags: |
             type=ref,event=pr
             type=semver,pattern={{version}}
@@ -40,4 +44,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
 
