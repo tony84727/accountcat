@@ -11,8 +11,8 @@ pub fn build_csp(nonce: Option<&str>) -> HeaderValue {
     let directives = [
         format!("script-src {nonce} 'strict-dynamic'"),
         format!("style-src 'self' https://accounts.google.com/gsi/style {nonce}"),
-        String::from("connect-src 'self' https://accounts.google.com/gsi/status"),
-        format!("frame-src https://accounts.google.com/gsi/iframe/select {nonce}"),
+        String::from("connect-src 'self' https://accounts.google.com/gsi/"),
+        format!("frame-src https://accounts.google.com/gsi/ {nonce}"),
         String::from("default-src 'self'"),
     ];
     HeaderValue::from_str(&(directives.join("; ") + ";")).unwrap()
