@@ -52,8 +52,10 @@ fn build_path(root: &PathBuf, path: &str) -> PathBuf {
     joined
 }
 
+const ASSET_CSP_NONCE_PLACEHOLDER: &str = "__CSP_NONCE__";
+
 fn inject_nonce(Nonce(nonce): &Nonce, source: &str) -> String {
-    source.replace("__CSP_NONCE__", nonce)
+    source.replace(ASSET_CSP_NONCE_PLACEHOLDER, nonce)
 }
 
 impl<B> Future for ServeDistFuture<B> {
@@ -83,11 +85,20 @@ impl<B> Future for ServeDistFuture<B> {
                     .body(String::from("404 not found"))
                     .unwrap());
             };
+            let vary_by_nonce = output.contains(ASSET_CSP_NONCE_PLACEHOLDER);
             let output = inject_nonce(nonce, &output);
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_LENGTH, output.len())
                 .header(header::CONTENT_TYPE, mime_type)
+                .header(
+                    header::CACHE_CONTROL,
+                    if vary_by_nonce {
+                        "private, no-store"
+                    } else {
+                        "public, max-age=31536000, immutable"
+                    },
+                )
                 .body(output)
                 .unwrap())
         });
