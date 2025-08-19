@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use iso_currency::{Currency, IntoEnumIterator};
 use sqlx::types::BigDecimal;
 use tonic::{Request, Response, Status};
 use tracing::error;
@@ -7,7 +8,8 @@ use tracing::error;
 use crate::{
     auth::get_claims,
     idl::accounting::{
-        Item, ItemList, NewItem, NewTag, Tag, TagList, TagSearch, accounting_server::Accounting,
+        CurrencyList, Item, ItemList, NewItem, NewTag, Tag, TagList, TagSearch,
+        accounting_server::Accounting,
     },
     protobufutils::to_proto_timestamp,
     server::ServerState,
@@ -147,5 +149,13 @@ returning tags.id, tags.name",
             })),
             Err(_err) => Err(Status::internal(String::new())),
         }
+    }
+
+    async fn list_currency(&self, _request: Request<()>) -> tonic::Result<Response<CurrencyList>> {
+        let code = Currency::iter()
+            .filter(|x| x.flags().is_empty())
+            .map(|x| String::from(x.code()))
+            .collect();
+        Ok(Response::new(CurrencyList { code }))
     }
 }

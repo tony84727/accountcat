@@ -41,9 +41,14 @@ message NewTag {
   string name = 1;
 }
 
+message CurrencyList {
+  repeated string code = 1;
+}
+
 service Accounting {
   rpc List(google.protobuf.Empty) returns (ItemList) {}
   rpc Add(NewItem) returns (Item) {}
   rpc CompleteTag(TagSearch) returns (TagList) {}
   rpc CreateTag(NewTag) returns (Tag) {}
+  rpc ListCurrency(google.protobuf.Empty) returns (CurrencyList) {}
 }

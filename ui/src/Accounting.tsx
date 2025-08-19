@@ -5,6 +5,8 @@ import Container from "@mui/material/Container";
 import FormControl from "@mui/material/FormControl";
 import Grid from "@mui/material/Grid";
 import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import Select, { type SelectChangeEvent } from "@mui/material/Select";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -75,10 +77,14 @@ export default function Accounting() {
 	const [onTagInputChange, registerOnTagInputChange] =
 		useState<(event: SyntheticEvent, value: string, reason: string) => void>();
 	const [onAdd, setOnAdd] = useState<() => void>();
+	const [onCurrnecyChange, registerOnCurrencyChange] =
+		useState<(event: SelectChangeEvent) => void>();
 	const [name, setName] = useState<string>("");
 	const [income, setIncome] = useState<string>("0");
 	const [expense, setExpense] = useState<string>("0");
+	const [currency, setCurrency] = useState<string>("TWD");
 	const [items, setItems] = useState<Item[]>();
+	const [currencies, setCurrencies] = useState<string[]>();
 	const [selectedTags, setSelectedTags] = useState<TagOption[]>([]);
 	const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
 	useEffect(() => {
@@ -99,6 +105,14 @@ export default function Accounting() {
 			registerOnTagInputChange,
 		);
 		const reset$: Observable<unknown> = defer(() => addResult$);
+		const currencyChange$ = createCallback(registerOnCurrencyChange);
+		const currencies$ = defer(() =>
+			accountingService.listCurrency(new Empty()),
+		).pipe(
+			map((response) => response.getCodeList()),
+			share(),
+		);
+		const currency$ = currencyChange$.pipe(map((e) => e.target.value));
 		const name$ = nameChange$.pipe(
 			startWith(""),
 			mergeWith(reset$.pipe(map(() => ""))),
@@ -207,24 +221,27 @@ export default function Accounting() {
 		items$.pipe(takeUntil(bye$)).subscribe(setItems);
 		selectedTags$.pipe(takeUntil(bye$)).subscribe(setSelectedTags);
 		tagOptions$.pipe(takeUntil(bye$)).subscribe(setTagOptions);
+		currencies$.pipe(takeUntil(bye$)).subscribe(setCurrencies);
+		currency$.pipe(takeUntil(bye$)).subscribe(setCurrency);
 		return () => bye$.next(undefined);
 	}, []);
 	return (
 		<Container>
 			<Grid container>
 				<Grid container gap={1} flexGrow={1} direction="column">
-					<Grid container gap={1} flexGrow={1}>
+					<Grid container gap={1}>
 						<TextField
 							label="項目"
 							value={name}
-							sx={{ fontSize: 40, flexGrow: 1 }}
+							sx={{ fontSize: 40 }}
 							className={styles.grow}
 							onChange={onNameChange}
 						/>
 						<TextField
 							label="支出"
 							value={expense}
-							sx={{ fontSize: 40, flexGrow: 1 }}
+							sx={{ fontSize: 40 }}
+							className={styles.grow}
 							slotProps={{
 								htmlInput: {
 									sx: { textAlign: "end", color: "#e18b8b", fontWeight: 900 },
@@ -235,7 +252,8 @@ export default function Accounting() {
 						<TextField
 							label="收入"
 							value={income}
-							sx={{ fontSize: 40, flexGrow: 1 }}
+							sx={{ fontSize: 40 }}
+							className={styles.grow}
 							slotProps={{
 								htmlInput: {
 									sx: { textAlign: "end", color: "#56b56f", fontWeight: 900 },
@@ -243,6 +261,21 @@ export default function Accounting() {
 							}}
 							onChange={onIncomeChange}
 						/>
+						<FormControl className={styles.currencySelect}>
+							<InputLabel>貨幣</InputLabel>
+							<Select
+								value={currency}
+								labelId="currency-select"
+								label="貨幣"
+								onChange={onCurrnecyChange}
+							>
+								{currencies?.map((x) => (
+									<MenuItem key={x} value={x}>
+										{x}
+									</MenuItem>
+								))}
+							</Select>
+						</FormControl>
 						<Button color="primary" onClick={onAdd}>
 							<AddCircleOutlineIcon />
 							新增
