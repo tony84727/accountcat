@@ -5,18 +5,22 @@ import "google/protobuf/timestamp.proto";
 
 package accountcat.accounting;
 
+enum AmountType {
+  EXPENSE = 0;
+  INCOME = 1;
+}
+
 message NewItem {
   string name = 1;
-  string income = 2;
-  string expense = 3;
-  repeated string tags = 4;
+  string amount = 2;
+  repeated string tags = 3;
 }
 
 message Item {
   string id = 1;
   string name = 2;
-  string income = 3;
-  string expense = 4;
+  string amount = 3;
+  AmountType type = 4;
   google.protobuf.Timestamp created_at = 5;
 }
 

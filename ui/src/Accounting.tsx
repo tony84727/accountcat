@@ -13,6 +13,7 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
+import classNames from "classnames";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import {
 	type FormEvent,
@@ -39,7 +40,13 @@ import {
 } from "rxjs";
 import styles from "./Accounting.module.scss";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
-import { type Item, NewItem, NewTag, TagSearch } from "./proto/accounting_pb";
+import {
+	AmountType,
+	type Item,
+	NewItem,
+	NewTag,
+	TagSearch,
+} from "./proto/accounting_pb";
 import {
 	createCallback,
 	createMultiArgumentCallback,
@@ -68,9 +75,7 @@ function isNotEmpty<T>(x: T | undefined): x is T {
 export default function Accounting() {
 	const [onNameChange, setOnNameChange] =
 		useState<TextFieldChangeEventHandler>();
-	const [onIncomeChange, setOnIncomeChange] =
-		useState<TextFieldChangeEventHandler>();
-	const [onExpenseChange, setOnExpenseChange] =
+	const [onAmountChange, registerOnExpenseChange] =
 		useState<TextFieldChangeEventHandler>();
 	const [onTagChange, setOnTagChange] =
 		useState<(event: SyntheticEvent, selected: TagOption[]) => void>();
@@ -80,8 +85,7 @@ export default function Accounting() {
 	const [onCurrnecyChange, registerOnCurrencyChange] =
 		useState<(event: SelectChangeEvent) => void>();
 	const [name, setName] = useState<string>("");
-	const [income, setIncome] = useState<string>("0");
-	const [expense, setExpense] = useState<string>("0");
+	const [amount, setAmount] = useState<string>("0");
 	const [currency, setCurrency] = useState<string>("TWD");
 	const [items, setItems] = useState<Item[]>();
 	const [currencies, setCurrencies] = useState<string[]>();
@@ -93,10 +97,7 @@ export default function Accounting() {
 		const nameChange$ = createCallback(setOnNameChange).pipe(
 			extractTextFieldValue(),
 		);
-		const incomeChange$ = createCallback(setOnIncomeChange).pipe(
-			extractTextFieldValue(),
-		);
-		const expenseChange$ = createCallback(setOnExpenseChange).pipe(
+		const amountChange$ = createCallback(registerOnExpenseChange).pipe(
 			extractTextFieldValue(),
 		);
 		const add$ = createNotifier(setOnAdd);
@@ -117,11 +118,7 @@ export default function Accounting() {
 			startWith(""),
 			mergeWith(reset$.pipe(map(() => ""))),
 		);
-		const income$ = incomeChange$.pipe(
-			startWith("0"),
-			mergeWith(reset$.pipe(map(() => "0"))),
-		);
-		const expense$ = expenseChange$.pipe(
+		const amount$ = amountChange$.pipe(
 			startWith("0"),
 			mergeWith(reset$.pipe(map(() => "0"))),
 		);
@@ -137,12 +134,11 @@ export default function Accounting() {
 			startWith([]),
 		);
 		const addResult$ = add$.pipe(
-			withLatestFrom(name$, expense$, income$, selectedTags$),
-			switchMap(([_, name, expense, income, tags]) => {
+			withLatestFrom(name$, amount$, selectedTags$),
+			switchMap(([_, name, expense, tags]) => {
 				const newItem = new NewItem();
 				newItem.setName(name);
-				newItem.setExpense(expense);
-				newItem.setIncome(income);
+				newItem.setAmount(expense);
 				newItem.setTagsList(tags.map((x) => x.id).filter(isNotEmpty));
 				return accountingService.add(newItem);
 			}),
@@ -216,8 +212,7 @@ export default function Accounting() {
 			share(),
 		);
 		name$.pipe(takeUntil(bye$)).subscribe(setName);
-		income$.pipe(takeUntil(bye$)).subscribe(setIncome);
-		expense$.pipe(takeUntil(bye$)).subscribe(setExpense);
+		amount$.pipe(takeUntil(bye$)).subscribe(setAmount);
 		items$.pipe(takeUntil(bye$)).subscribe(setItems);
 		selectedTags$.pipe(takeUntil(bye$)).subscribe(setSelectedTags);
 		tagOptions$.pipe(takeUntil(bye$)).subscribe(setTagOptions);
@@ -238,28 +233,20 @@ export default function Accounting() {
 							onChange={onNameChange}
 						/>
 						<TextField
-							label="支出"
-							value={expense}
+							label="金額"
+							value={amount}
 							sx={{ fontSize: 40 }}
-							className={styles.grow}
+							className={classNames([
+								styles.grow,
+								styles.amount,
+								styles.amountInput,
+							])}
 							slotProps={{
 								htmlInput: {
-									sx: { textAlign: "end", color: "#e18b8b", fontWeight: 900 },
+									sx: { textAlign: "end", fontWeight: 900 },
 								},
 							}}
-							onChange={onExpenseChange}
-						/>
-						<TextField
-							label="收入"
-							value={income}
-							sx={{ fontSize: 40 }}
-							className={styles.grow}
-							slotProps={{
-								htmlInput: {
-									sx: { textAlign: "end", color: "#56b56f", fontWeight: 900 },
-								},
-							}}
-							onChange={onIncomeChange}
+							onChange={onAmountChange}
 						/>
 						<FormControl className={styles.currencySelect}>
 							<InputLabel>貨幣</InputLabel>
@@ -299,8 +286,7 @@ export default function Accounting() {
 					<TableHead>
 						<TableRow>
 							<TableCell>項目</TableCell>
-							<TableCell>支出</TableCell>
-							<TableCell>收入</TableCell>
+							<TableCell>金額</TableCell>
 							<TableCell>時間</TableCell>
 						</TableRow>
 					</TableHead>
@@ -308,8 +294,17 @@ export default function Accounting() {
 						{items?.map((item) => (
 							<TableRow key={item.getId()}>
 								<TableCell>{item.getName()} </TableCell>
-								<TableCell>{item.getExpense()} </TableCell>
-								<TableCell>{item.getIncome()} </TableCell>
+								<TableCell
+									className={classNames([
+										styles.amount,
+										{
+											[styles.expense]: item.getType() === AmountType.EXPENSE,
+											[styles.income]: item.getType() === AmountType.INCOME,
+										},
+									])}
+								>
+									{item.getAmount()}{" "}
+								</TableCell>
 								<TableCell>{formatTimestamp(item.getCreatedAt())} </TableCell>
 							</TableRow>
 						))}

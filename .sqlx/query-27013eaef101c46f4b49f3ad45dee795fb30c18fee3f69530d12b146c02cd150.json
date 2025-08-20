@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "insert into accounting_items (user_id, name, income, expense)\nselect users.id, $1, $2, $3\nfrom users\nwhere users.google_sub = $4\nreturning accounting_items.id, accounting_items.name, accounting_items.income, accounting_items.expense, accounting_items.created_at",
+  "query": "insert into accounting_items (user_id, name, amount)\nselect users.id, $1, $2\nfrom users\nwhere users.google_sub = $3\nreturning accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.created_at",
   "describe": {
     "columns": [
       {
@@ -15,16 +15,11 @@
       },
       {
         "ordinal": 2,
-        "name": "income",
+        "name": "amount",
         "type_info": "Numeric"
       },
       {
         "ordinal": 3,
-        "name": "expense",
-        "type_info": "Numeric"
-      },
-      {
-        "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -33,7 +28,6 @@
       "Left": [
         "Varchar",
         "Numeric",
-        "Numeric",
         "Text"
       ]
     },
@@ -41,9 +35,8 @@
       false,
       true,
       false,
-      false,
       true
     ]
   },
-  "hash": "5fc48364a1fe64b772ff292685be4d6f00280947bd4ef09abc5ccf443f985881"
+  "hash": "27013eaef101c46f4b49f3ad45dee795fb30c18fee3f69530d12b146c02cd150"
 }
