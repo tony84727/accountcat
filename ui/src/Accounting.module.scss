@@ -1,3 +1,23 @@
 .grow {
   flex-grow: 1;
 }
+
+.currencySelect {
+  min-width: 5rem;
+}
+
+.expense {
+  color: #e18b8b;
+}
+
+.income {
+  color: #56b56f;
+}
+
+.amount {
+  font-weight: 900;
+}
+
+.amountInput {
+  text-align: end;
+}

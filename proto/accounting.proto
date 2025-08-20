@@ -5,18 +5,27 @@ import "google/protobuf/timestamp.proto";
 
 package accountcat.accounting;
 
+enum AmountType {
+  EXPENSE = 0;
+  INCOME = 1;
+}
+
+message Amount {
+  string currency = 1;
+  string amount = 2;
+}
+
 message NewItem {
   string name = 1;
-  string income = 2;
-  string expense = 3;
-  repeated string tags = 4;
+  Amount amount = 2;
+  repeated string tags = 3;
 }
 
 message Item {
   string id = 1;
   string name = 2;
-  string income = 3;
-  string expense = 4;
+  Amount amount = 3;
+  AmountType type = 4;
   google.protobuf.Timestamp created_at = 5;
 }
 
@@ -41,9 +50,14 @@ message NewTag {
   string name = 1;
 }
 
+message CurrencyList {
+  repeated string code = 1;
+}
+
 service Accounting {
   rpc List(google.protobuf.Empty) returns (ItemList) {}
   rpc Add(NewItem) returns (Item) {}
   rpc CompleteTag(TagSearch) returns (TagList) {}
   rpc CreateTag(NewTag) returns (Tag) {}
+  rpc ListCurrency(google.protobuf.Empty) returns (CurrencyList) {}
 }
