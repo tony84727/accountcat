@@ -41,6 +41,7 @@ import {
 import styles from "./Accounting.module.scss";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import {
+	Amount,
 	AmountType,
 	type Item,
 	NewItem,
@@ -134,11 +135,14 @@ export default function Accounting() {
 			startWith([]),
 		);
 		const addResult$ = add$.pipe(
-			withLatestFrom(name$, amount$, selectedTags$),
-			switchMap(([_, name, expense, tags]) => {
+			withLatestFrom(name$, amount$, selectedTags$, currency$),
+			switchMap(([_, name, expense, tags, currency]) => {
 				const newItem = new NewItem();
+				const amount = new Amount();
+				amount.setAmount(expense);
+				amount.setCurrency(currency);
 				newItem.setName(name);
-				newItem.setAmount(expense);
+				newItem.setAmount(amount);
 				newItem.setTagsList(tags.map((x) => x.id).filter(isNotEmpty));
 				return accountingService.add(newItem);
 			}),
@@ -287,6 +291,7 @@ export default function Accounting() {
 						<TableRow>
 							<TableCell>項目</TableCell>
 							<TableCell>金額</TableCell>
+							<TableCell>幣別</TableCell>
 							<TableCell>時間</TableCell>
 						</TableRow>
 					</TableHead>
@@ -303,8 +308,9 @@ export default function Accounting() {
 										},
 									])}
 								>
-									{item.getAmount()}{" "}
+									{item.getAmount()?.getAmount()}{" "}
 								</TableCell>
+								<TableCell>{item.getAmount()?.getCurrency()}</TableCell>
 								<TableCell>{formatTimestamp(item.getCreatedAt())} </TableCell>
 							</TableRow>
 						))}

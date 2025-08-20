@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "select accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.created_at\nfrom accounting_items\njoin users on users.id = accounting_items.user_id\nwhere users.google_sub = $1\norder by accounting_items.created_at desc",
+  "query": "insert into accounting_items (user_id, name, amount, currency)\nselect users.id, $1, $2, $3\nfrom users\nwhere users.google_sub = $4\nreturning accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.currency, accounting_items.created_at",
   "describe": {
     "columns": [
       {
@@ -20,12 +20,20 @@
       },
       {
         "ordinal": 3,
+        "name": "currency",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
+        "Varchar",
+        "Numeric",
+        "Varchar",
         "Text"
       ]
     },
@@ -33,8 +41,9 @@
       false,
       true,
       false,
+      false,
       true
     ]
   },
-  "hash": "a696cb0fbea6f8645af4051a371dd9f1def97e48b3ce948da684a021ae7db397"
+  "hash": "f333eeb0cd7088371ba36c46a5d615eda8773c465eaacb4addcb434a46a5c9f8"
 }
