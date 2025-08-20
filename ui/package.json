@@ -26,6 +26,7 @@
 		"@types/google.accounts": "^0.0.17",
 		"@types/react": "^19.1.8",
 		"@types/react-dom": "^19.1.6",
+		"classnames": "^2.5.1",
 		"date-fns": "^4.1.0",
 		"google-protobuf": "^3.21.4",
 		"grpc-web": "^1.5.0",
