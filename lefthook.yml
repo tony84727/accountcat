@@ -1,9 +1,15 @@
 pre-commit:
   commands:
     check:
+      stage_fixed: true
       root: "ui/"
       glob: "*.{js,ts,cjs,mjs,d.cts,d.mts,jsx,tsx,json,jsonc}"
       run: npx @biomejs/biome check --no-errors-on-unmatched --files-ignore-unknown=true --colors=off {staged_files}
+    format-rust:
+      stage_fixed: true
+      globL: "*.rs"
+      run: cargo fmt
     update-sqlx:
+      stage_fixed: true
       globL: "*.rs"
       run: cargo sqlx prepare
