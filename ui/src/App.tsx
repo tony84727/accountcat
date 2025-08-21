@@ -1,6 +1,8 @@
 import "normalize.css";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
+import Box from "@mui/material/Box";
+import Toolbar from "@mui/material/Toolbar";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import { lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router";
@@ -13,8 +15,8 @@ import {
 	switchMap,
 	takeUntil,
 } from "rxjs/operators";
+import Bar from "./Bar.tsx";
 import type { Response } from "./GoogleSignIn";
-import Nav from "./Nav";
 import { UserClient } from "./proto/UserServiceClientPb";
 import { LoginRequest } from "./proto/user_pb";
 import { useSubject } from "./rxjsutils";
@@ -66,17 +68,18 @@ const App = () => {
 	return (
 		<CacheProvider value={emotionCache}>
 			<BrowserRouter>
-				<div>
-					<Nav
-						username={username}
-						onLogin={onLogin}
-						promptLogin={promptLogin}
-					/>
-				</div>
-				<Routes>
-					<Route path="/todo/*" element={<TodoList />} />
-					<Route path="/accounting/*" element={<Accounting />} />
-				</Routes>
+				<Bar
+					username={username}
+					promptLogin={promptLogin}
+					onLogin={onLogin}
+				></Bar>
+				<Box>
+					<Toolbar />
+					<Routes>
+						<Route path="/todo/*" element={<TodoList />} />
+						<Route path="/accounting/*" element={<Accounting />} />
+					</Routes>
+				</Box>
 			</BrowserRouter>
 		</CacheProvider>
 	);
