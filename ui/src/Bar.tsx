@@ -28,7 +28,9 @@ export default function Bar({ username, promptLogin, onLogin }: Props) {
 					value={currentTab}
 					sx={{
 						flexGrow: 1,
-						"& .MuiTabs-indicator": { backgroundColor: "white" },
+						"& .MuiTabs-indicator": {
+							backgroundColor: (theme) => theme.palette.secondary.light,
+						},
 					}}
 				>
 					<LinkTab
