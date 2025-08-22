@@ -111,7 +111,7 @@ where users.google_sub = $2 and tags.id = any($3)",
             name: item.name.unwrap_or_default(),
             amount: Some(Amount {
                 currency: item.currency,
-                amount: item.amount.to_string(),
+                amount: item.amount.normalized().to_plain_string(),
             }),
             r#type: if item.amount < BigDecimal::from(0) {
                 AmountType::Expense
