@@ -2,6 +2,7 @@ import "normalize.css";
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import Box from "@mui/material/Box";
+import { createTheme, ThemeProvider } from "@mui/material/styles";
 import Toolbar from "@mui/material/Toolbar";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import { lazy, useEffect, useMemo, useState } from "react";
@@ -20,11 +21,14 @@ import type { Response } from "./GoogleSignIn";
 import { UserClient } from "./proto/UserServiceClientPb";
 import { LoginRequest } from "./proto/user_pb";
 import { useSubject } from "./rxjsutils";
+import themeConfig from "./theme.ts";
 
 const TodoList = lazy(() => import("./TodoList.tsx"));
 const Accounting = lazy(() => import("./Accounting.tsx"));
 
 const userClient = new UserClient("/api");
+
+const theme = createTheme(themeConfig);
 
 const App = () => {
 	const [onLogin$, onLogin] = useSubject<Response>();
@@ -67,20 +71,22 @@ const App = () => {
 	}, [onLogin$]);
 	return (
 		<CacheProvider value={emotionCache}>
-			<BrowserRouter>
-				<Bar
-					username={username}
-					promptLogin={promptLogin}
-					onLogin={onLogin}
-				></Bar>
-				<Box>
-					<Toolbar />
-					<Routes>
-						<Route path="/todo/*" element={<TodoList />} />
-						<Route path="/accounting/*" element={<Accounting />} />
-					</Routes>
-				</Box>
-			</BrowserRouter>
+			<ThemeProvider theme={theme}>
+				<BrowserRouter>
+					<Bar
+						username={username}
+						promptLogin={promptLogin}
+						onLogin={onLogin}
+					></Bar>
+					<Box>
+						<Toolbar />
+						<Routes>
+							<Route path="/todo/*" element={<TodoList />} />
+							<Route path="/accounting/*" element={<Accounting />} />
+						</Routes>
+					</Box>
+				</BrowserRouter>
+			</ThemeProvider>
 		</CacheProvider>
 	);
 };
