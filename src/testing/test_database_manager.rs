@@ -35,13 +35,42 @@ impl TestDatabaseManager {
     }
 
     pub async fn clean(&mut self) -> Result<(), sqlx::Error> {
-        let mut tx = self.pool.begin().await?;
-        for database in self.databases.iter() {
-            tx.execute(format!(r#"drop database "{database}""#).as_str())
-                .await?;
+        let databases = std::mem::take(&mut self.databases);
+        for database in databases.iter() {
+            drop_database(&self.pool, database).await?;
         }
-        tx.commit().await?;
-        self.databases = Vec::new();
         Ok(())
+    }
+}
+
+async fn drop_database(pool: &PgPool, database: &str) -> sqlx::Result<()> {
+    pool.execute(format!(r#"drop database "{database}" with (FORCE)"#).as_str())
+        .await?;
+    Ok(())
+}
+
+impl Drop for TestDatabaseManager {
+    fn drop(&mut self) {
+        let Self {
+            databases,
+            database_config,
+            ..
+        } = self;
+        if databases.is_empty() {
+            return;
+        }
+        let pool: PgPool = database_config.clone().into();
+        let clean = futures::future::join_all(databases.iter().map(|database| {
+            let pool = pool.clone();
+            let database = database.clone();
+            async move { drop_database(&pool, &database).await }
+        }));
+        std::thread::spawn(move || {
+            if let Ok(rt) = tokio::runtime::Runtime::new() {
+                rt.block_on(clean);
+            }
+        })
+        .join()
+        .unwrap();
     }
 }
