@@ -6,7 +6,6 @@ export interface Response {
 	credential: string;
 }
 interface Props {
-	clientId: string;
 	loginCallback(response: Response): void;
 }
 
