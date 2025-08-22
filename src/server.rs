@@ -30,7 +30,7 @@ pub struct ServerState {
     pub jwt_verify: JwtVerifier,
 }
 
-async fn init_state(Config { login, database }: &Config) -> ServerState {
+pub async fn init_state(Config { login, database }: &Config) -> ServerState {
     let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, login.client_id.clone())
         .await
         .expect("init jwt verifier");

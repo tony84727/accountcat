@@ -1,4 +1,4 @@
-mod accounting_service;
+pub mod accounting_service;
 mod auth;
 pub mod config;
 mod csp;
@@ -9,5 +9,6 @@ mod protobufutils;
 mod secret_se;
 mod serve_dist;
 pub mod server;
+pub mod testing;
 mod todolist_service;
 mod user_service;
