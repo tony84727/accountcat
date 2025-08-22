@@ -3,26 +3,33 @@ use std::sync::Arc;
 use tonic::{Request, Response};
 
 use crate::{
-    auth::get_claims,
+    auth::IdClaimExtractor,
     idl::todolist::{ListResult, NewTask, Task, TaskUpdate, todolist_server::Todolist},
     protobufutils::to_proto_timestamp,
     server::ServerState,
 };
 
-pub struct TodolistApi {
+pub struct TodolistApi<I> {
     state: Arc<ServerState>,
+    id_claim_extractor: Arc<I>,
 }
 
-impl TodolistApi {
-    pub fn new(state: Arc<ServerState>) -> Self {
-        Self { state }
+impl<I> TodolistApi<I> {
+    pub fn new(state: Arc<ServerState>, id_claim_extractor: Arc<I>) -> Self {
+        Self {
+            state,
+            id_claim_extractor,
+        }
     }
 }
 
 #[tonic::async_trait]
-impl Todolist for TodolistApi {
+impl<I> Todolist for TodolistApi<I>
+where
+    I: IdClaimExtractor + Send + Sync + 'static,
+{
     async fn list(&self, request: Request<()>) -> tonic::Result<Response<ListResult>> {
-        let claims = get_claims(&request).await?;
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
         let tasks = match sqlx::query!(
             "select todo_tasks.id, todo_tasks.name, todo_tasks.description, todo_tasks.completed, todo_tasks.created_at
 from todo_tasks
@@ -51,7 +58,7 @@ order by todo_tasks.created_at desc",
     }
 
     async fn add(&self, request: Request<NewTask>) -> tonic::Result<Response<()>> {
-        let claims = get_claims(&request).await?;
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
         let NewTask { name, description } = request.into_inner();
         if sqlx::query!(
             "insert into todo_tasks (user_id, name, description)
@@ -72,7 +79,7 @@ where google_sub = $3",
     }
 
     async fn update_task(&self, request: Request<TaskUpdate>) -> tonic::Result<Response<Task>> {
-        let claims = get_claims(&request).await?;
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
         let TaskUpdate { id, completed } = request.into_inner();
         let Ok(id) = id.parse::<i32>() else {
             return Err(tonic::Status::not_found(String::new()));

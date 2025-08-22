@@ -6,7 +6,7 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 
 use crate::{
-    auth::get_claims,
+    auth::IdClaimExtractor,
     idl::accounting::{
         Amount, AmountType, CurrencyList, Item, ItemList, NewItem, NewTag, Tag, TagList, TagSearch,
         accounting_server::Accounting,
@@ -15,20 +15,27 @@ use crate::{
     server::ServerState,
 };
 
-pub struct AccountingApi {
+pub struct AccountingApi<I> {
     state: Arc<ServerState>,
+    id_claim_extractor: Arc<I>,
 }
 
-impl AccountingApi {
-    pub fn new(state: Arc<ServerState>) -> Self {
-        Self { state }
+impl<I> AccountingApi<I> {
+    pub fn new(state: Arc<ServerState>, id_claim_extractor: Arc<I>) -> Self {
+        Self {
+            state,
+            id_claim_extractor,
+        }
     }
 }
 
 #[tonic::async_trait]
-impl Accounting for AccountingApi {
+impl<I> Accounting for AccountingApi<I>
+where
+    I: IdClaimExtractor + Send + Sync + 'static,
+{
     async fn list(&self, request: Request<()>) -> tonic::Result<Response<ItemList>> {
-        let claims = get_claims(&request).await?;
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
         let items = match sqlx::query!("select accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.currency, accounting_items.created_at
 from accounting_items
 join users on users.id = accounting_items.user_id
@@ -59,7 +66,7 @@ order by accounting_items.created_at desc", claims.sub)
         Ok(Response::new(ItemList { items }))
     }
     async fn add(&self, request: Request<NewItem>) -> tonic::Result<Response<Item>> {
-        let claims = get_claims(&request).await?;
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
         let NewItem { name, amount, tags } = request.into_inner();
         let Some(Amount { amount, currency }) = amount else {
             return Err(Status::invalid_argument("missing amount"));
@@ -116,7 +123,7 @@ where users.google_sub = $2 and tags.id = any($3)",
         }))
     }
     async fn complete_tag(&self, request: Request<TagSearch>) -> tonic::Result<Response<TagList>> {
-        let claims = get_claims(&request).await?;
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
         let TagSearch { keyword } = request.into_inner();
         match sqlx::query!(
             r#"select tags.id, tags.name
@@ -139,7 +146,7 @@ where users.google_sub = $1 and tags.name like $2 escape '\'"#,
     }
 
     async fn create_tag(&self, request: Request<NewTag>) -> tonic::Result<Response<Tag>> {
-        let claims = get_claims(&request).await?;
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
         let NewTag { name } = request.into_inner();
         match sqlx::query!(
             "insert into tags (user_id, name)
