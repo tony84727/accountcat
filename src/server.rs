@@ -12,6 +12,7 @@ use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
     accounting_service,
+    auth::FromSession,
     config::{self, Config},
     csp::{CspLayer, NonceLayer, build_csp},
     idl::{
@@ -30,7 +31,7 @@ pub struct ServerState {
     pub jwt_verify: JwtVerifier,
 }
 
-async fn init_state(Config { login, database }: &Config) -> ServerState {
+pub async fn init_state(Config { login, database }: &Config) -> ServerState {
     let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, login.client_id.clone())
         .await
         .expect("init jwt verifier");
@@ -72,10 +73,15 @@ pub async fn main(arg: &ServerArg) {
         server_state.clone(),
         loaded_config.login.client_id,
     ));
-    let todolist_api =
-        TodolistServer::new(todolist_service::TodolistApi::new(server_state.clone()));
-    let accounting_api =
-        AccountingServer::new(accounting_service::AccountingApi::new(server_state.clone()));
+    let id_claim_extractor = Arc::new(FromSession);
+    let todolist_api = TodolistServer::new(todolist_service::TodolistApi::new(
+        server_state.clone(),
+        id_claim_extractor.clone(),
+    ));
+    let accounting_api = AccountingServer::new(accounting_service::AccountingApi::new(
+        server_state.clone(),
+        id_claim_extractor.clone(),
+    ));
     let mut grpc_server_builder = tonic::service::Routes::builder();
     grpc_server_builder.add_service(user_api);
     grpc_server_builder.add_service(todolist_api);
