@@ -1,0 +1,5 @@
+[login]
+client_id = "dummy"
+
+[database]
+host = "database"
