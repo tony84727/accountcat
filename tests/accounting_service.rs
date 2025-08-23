@@ -34,17 +34,25 @@ async fn test_add_accounting_item() {
         Arc::new(server_state),
         Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
     );
-    let req = Request::new(NewItem {
-        name: String::from("item 1"),
-        amount: Some(Amount {
-            amount: String::from("100.1"),
-            currency: String::from("TWD"),
-        }),
-        tags: Default::default(),
-    });
-    let response = accounting_api.add(req).await.unwrap();
-    assert_eq!(
-        "100.1",
-        response.into_inner().amount.map(|x| x.amount).unwrap()
-    );
+
+    let test_add = async |amount: &'static str| {
+        let req = Request::new(NewItem {
+            name: String::from("test item"),
+            amount: Some(Amount {
+                amount: String::from(amount),
+                currency: String::from("TWD"),
+            }),
+            tags: Default::default(),
+        });
+        let response = accounting_api.add(req).await.unwrap();
+        assert_eq!(
+            amount,
+            response.into_inner().amount.map(|x| x.amount).unwrap(),
+            "insert {}",
+            amount,
+        );
+    };
+    test_add("100.1").await;
+    test_add("100000.1").await;
+    test_add("999999.99").await;
 }
