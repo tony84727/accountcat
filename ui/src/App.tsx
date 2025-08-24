@@ -18,6 +18,7 @@ import {
 } from "rxjs/operators";
 import Bar from "./Bar.tsx";
 import type { Response } from "./GoogleSignIn";
+import MenuDrawer from "./MenuDrawer.tsx";
 import { UserClient } from "./proto/UserServiceClientPb";
 import { LoginRequest } from "./proto/user_pb";
 import { useSubject } from "./rxjsutils";
@@ -69,15 +70,23 @@ const App = () => {
 
 		return () => bye$.next(undefined);
 	}, [onLogin$]);
+	const [drawerOpen, setDrawerOpen] = useState(false);
+
 	return (
 		<CacheProvider value={emotionCache}>
 			<ThemeProvider theme={theme}>
 				<BrowserRouter>
 					<Bar
+						openDrawer={() => setDrawerOpen(true)}
 						username={username}
 						promptLogin={promptLogin}
 						onLogin={onLogin}
 					></Bar>
+					<MenuDrawer
+						username={username}
+						open={drawerOpen}
+						onClose={() => setDrawerOpen(false)}
+					/>
 					<Box>
 						<Toolbar />
 						<Routes>
