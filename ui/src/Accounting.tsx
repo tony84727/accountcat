@@ -114,7 +114,10 @@ export default function Accounting() {
 			map((response) => response.getCodeList()),
 			share(),
 		);
-		const currency$ = currencyChange$.pipe(map((e) => e.target.value));
+		const currency$ = currencyChange$.pipe(
+			map((e) => e.target.value),
+			startWith("TWD"),
+		);
 		const name$ = nameChange$.pipe(
 			startWith(""),
 			mergeWith(reset$.pipe(map(() => ""))),
