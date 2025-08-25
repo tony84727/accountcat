@@ -39,6 +39,7 @@ import {
 	withLatestFrom,
 } from "rxjs";
 import styles from "./Accounting.module.scss";
+import AmountTypeSwitch from "./AmountTypeSwitch";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import {
 	Amount,
@@ -85,8 +86,11 @@ export default function Accounting() {
 	const [onAdd, setOnAdd] = useState<() => void>();
 	const [onCurrnecyChange, registerOnCurrencyChange] =
 		useState<(event: SelectChangeEvent) => void>();
+	const [onAmountTypeChange, registerOnAmountTypeChange] =
+		useState<(amountType: AmountType) => void>();
 	const [name, setName] = useState<string>("");
 	const [amount, setAmount] = useState<string>("0");
+	const [amountType, setAmountType] = useState<AmountType>(AmountType.EXPENSE);
 	const [currency, setCurrency] = useState<string>("TWD");
 	const [items, setItems] = useState<Item[]>();
 	const [currencies, setCurrencies] = useState<string[]>();
@@ -106,6 +110,7 @@ export default function Accounting() {
 		const onTagInputChange$ = createMultiArgumentCallback(
 			registerOnTagInputChange,
 		);
+		const amountTypeChange$ = createCallback(registerOnAmountTypeChange);
 		const reset$: Observable<unknown> = defer(() => addResult$);
 		const currencyChange$ = createCallback(registerOnCurrencyChange);
 		const currencies$ = defer(() =>
@@ -137,9 +142,10 @@ export default function Accounting() {
 			]),
 			startWith([]),
 		);
+		const amountType$ = amountTypeChange$.pipe(startWith(AmountType.EXPENSE));
 		const addResult$ = add$.pipe(
-			withLatestFrom(name$, amount$, selectedTags$, currency$),
-			switchMap(([_, name, expense, tags, currency]) => {
+			withLatestFrom(name$, amount$, selectedTags$, currency$, amountType$),
+			switchMap(([_, name, expense, tags, currency, amountType]) => {
 				const newItem = new NewItem();
 				const amount = new Amount();
 				amount.setAmount(expense);
@@ -147,6 +153,7 @@ export default function Accounting() {
 				newItem.setName(name);
 				newItem.setAmount(amount);
 				newItem.setTagsList(tags.map((x) => x.id).filter(isNotEmpty));
+				newItem.setType(amountType);
 				return accountingService.add(newItem);
 			}),
 			share(),
@@ -225,6 +232,7 @@ export default function Accounting() {
 		tagOptions$.pipe(takeUntil(bye$)).subscribe(setTagOptions);
 		currencies$.pipe(takeUntil(bye$)).subscribe(setCurrencies);
 		currency$.pipe(takeUntil(bye$)).subscribe(setCurrency);
+		amountType$.pipe(takeUntil(bye$)).subscribe(setAmountType);
 		return () => bye$.next(undefined);
 	}, []);
 	return (
@@ -239,6 +247,10 @@ export default function Accounting() {
 						onChange={onNameChange}
 					/>
 					<Grid container gap={1}>
+						<AmountTypeSwitch
+							value={amountType}
+							onChange={onAmountTypeChange}
+						/>
 						<TextField
 							label="金額"
 							value={amount}
