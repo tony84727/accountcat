@@ -44,7 +44,7 @@ order by accounting_items.created_at desc", claims.sub)
             .map(|x| Item {
                 id: x.id.to_string(),
                 amount: Some(Amount{
-                    amount: x.amount.to_string(),
+                    amount: x.amount.normalized().to_string(),
                     currency: x.currency,
                 }),
                 r#type: if x.amount < BigDecimal::from(0) {
