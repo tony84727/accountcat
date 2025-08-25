@@ -67,16 +67,24 @@ order by accounting_items.created_at desc", claims.sub)
     }
     async fn add(&self, request: Request<NewItem>) -> tonic::Result<Response<Item>> {
         let claims = self.id_claim_extractor.get_claims(&request).await?;
-        let NewItem { name, amount, tags } = request.into_inner();
+        let NewItem {
+            name,
+            amount,
+            tags,
+            r#type,
+        } = request.into_inner();
         let Some(Amount { amount, currency }) = amount else {
             return Err(Status::invalid_argument("missing amount"));
         };
-        let Ok(amount) = amount.parse::<BigDecimal>() else {
+        let Ok(mut amount) = amount.parse::<BigDecimal>() else {
             return Err(Status::invalid_argument("amount isn't numeric"));
         };
         let Ok(mut tx) = self.state.database.begin().await else {
             return Err(Status::internal(String::new()));
         };
+        if r#type == (AmountType::Expense as i32) {
+            amount = -amount;
+        }
         let item = match sqlx::query!("insert into accounting_items (user_id, name, amount, currency)
 select users.id, $1, $2, $3
 from users
