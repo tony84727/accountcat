@@ -231,14 +231,14 @@ export default function Accounting() {
 		<Container>
 			<Grid container>
 				<Grid container gap={1} flexGrow={1} direction="column">
+					<TextField
+						label="項目"
+						value={name}
+						sx={{ fontSize: 40 }}
+						className={styles.grow}
+						onChange={onNameChange}
+					/>
 					<Grid container gap={1}>
-						<TextField
-							label="項目"
-							value={name}
-							sx={{ fontSize: 40 }}
-							className={styles.grow}
-							onChange={onNameChange}
-						/>
 						<TextField
 							label="金額"
 							value={amount}
@@ -270,10 +270,6 @@ export default function Accounting() {
 								))}
 							</Select>
 						</FormControl>
-						<Button color="primary" onClick={onAdd}>
-							<AddCircleOutlineIcon />
-							新增
-						</Button>
 					</Grid>
 					<FormControl>
 						<InputLabel></InputLabel>
@@ -288,6 +284,10 @@ export default function Accounting() {
 							onInputChange={onTagInputChange}
 						/>
 					</FormControl>
+					<Button color="primary" onClick={onAdd} variant="contained">
+						<AddCircleOutlineIcon />
+						新增
+					</Button>
 				</Grid>
 				<Table>
 					<TableHead>
