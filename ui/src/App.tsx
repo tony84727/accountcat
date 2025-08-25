@@ -26,6 +26,7 @@ import themeConfig from "./theme.ts";
 
 const TodoList = lazy(() => import("./TodoList.tsx"));
 const Accounting = lazy(() => import("./Accounting.tsx"));
+const Intro = lazy(() => import("./Intro.tsx"));
 
 const userClient = new UserClient("/api");
 
@@ -90,6 +91,7 @@ const App = () => {
 					<Box>
 						<Toolbar />
 						<Routes>
+							<Route index element={<Intro />} />
 							<Route path="/todo/*" element={<TodoList />} />
 							<Route path="/accounting/*" element={<Accounting />} />
 						</Routes>
