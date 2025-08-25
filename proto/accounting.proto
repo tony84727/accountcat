@@ -18,7 +18,8 @@ message Amount {
 message NewItem {
   string name = 1;
   Amount amount = 2;
-  repeated string tags = 3;
+  AmountType type = 3;
+  repeated string tags = 4;
 }
 
 message Item {
