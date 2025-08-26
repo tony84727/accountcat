@@ -1,5 +1,6 @@
 use std::{convert::Infallible, io, path::PathBuf, task::Poll};
 
+use axum::body::Body;
 use http::{HeaderValue, Request, Response, StatusCode, header};
 use mime_guess::mime;
 use tower::Service;
@@ -20,7 +21,7 @@ impl ServeDist {
 }
 
 impl<B> Service<Request<B>> for ServeDist {
-    type Response = Response<String>;
+    type Response = Response<Body>;
 
     type Error = Infallible;
 
@@ -48,8 +49,11 @@ pub struct ServeDistFuture<B> {
 
 fn build_path(root: &PathBuf, path: &str) -> PathBuf {
     let joined = root.clone().join(path.strip_prefix("/").unwrap());
-    let Ok(joined) = joined.canonicalize() else {
-        return root.join("index.html");
+    let joined = match joined.canonicalize() {
+        Ok(joined) => joined,
+        Err(_err) => {
+            return root.join("index.html");
+        }
     };
     if !joined.starts_with(root) || !joined.is_file() {
         return root.join("index.html");
@@ -59,12 +63,17 @@ fn build_path(root: &PathBuf, path: &str) -> PathBuf {
 
 const ASSET_CSP_NONCE_PLACEHOLDER: &str = "__CSP_NONCE__";
 
-fn inject_nonce(Nonce(nonce): &Nonce, source: &str) -> String {
-    source.replace(ASSET_CSP_NONCE_PLACEHOLDER, nonce)
+fn inject_nonce(Nonce(nonce): &Nonce, source: Vec<u8>) -> Vec<u8> {
+    match String::from_utf8(source) {
+        Ok(file_string) => file_string
+            .replace(ASSET_CSP_NONCE_PLACEHOLDER, nonce)
+            .into_bytes(),
+        Err(err) => err.into_bytes(),
+    }
 }
 
 impl<B> Future for ServeDistFuture<B> {
-    type Output = Result<Response<String>, Infallible>;
+    type Output = Result<Response<Body>, Infallible>;
 
     fn poll(
         self: std::pin::Pin<&mut Self>,
@@ -74,7 +83,7 @@ impl<B> Future for ServeDistFuture<B> {
             let Some(nonce) = self.req.extensions().get::<Nonce>() else {
                 return Ok(Response::builder()
                     .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(String::from("500 internal server error"))
+                    .body(String::from("500 internal server error").into())
                     .unwrap());
             };
             let path = build_path(&self.root, self.req.uri().path());
@@ -84,14 +93,15 @@ impl<B> Future for ServeDistFuture<B> {
                 .unwrap_or_else(|| {
                     HeaderValue::from_static(mime::APPLICATION_OCTET_STREAM.as_ref())
                 });
-            let Ok(output) = std::fs::read_to_string(path) else {
+            let Ok(output) = std::fs::read(path) else {
                 return Ok(Response::builder()
                     .status(StatusCode::NOT_FOUND)
-                    .body(String::from("404 not found"))
+                    .body(String::from("404 not found").into())
                     .unwrap());
             };
-            let vary_by_nonce = output.contains(ASSET_CSP_NONCE_PLACEHOLDER);
-            let output = inject_nonce(nonce, &output);
+            let origin_len = output.len();
+            let output = inject_nonce(nonce, output);
+            let vary_by_nonce = origin_len != output.len();
             Ok(Response::builder()
                 .status(StatusCode::OK)
                 .header(header::CONTENT_LENGTH, output.len())
@@ -104,7 +114,7 @@ impl<B> Future for ServeDistFuture<B> {
                         "public, max-age=31536000, immutable"
                     },
                 )
-                .body(output)
+                .body(output.into())
                 .unwrap())
         });
         f.as_mut().poll(cx)
