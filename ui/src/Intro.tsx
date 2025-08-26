@@ -1,4 +1,6 @@
+import GitHubIcon from "@mui/icons-material/GitHub";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import Logo from "./logo.png";
@@ -35,7 +37,13 @@ export default function Intro() {
 				>
 					Accountcat
 				</Typography>
-				<Typography color="textPrimary">記帳小幫手</Typography>
+				<Grid container alignItems="center">
+					<Typography color="textPrimary">記帳小幫手</Typography>
+					<Button href="https://github.com/tony84727/accountcat">
+						<GitHubIcon></GitHubIcon>
+						原始碼
+					</Button>
+				</Grid>
 			</Grid>
 		</Grid>
 	);
