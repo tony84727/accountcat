@@ -1,4 +1,4 @@
-use std::{convert::Infallible, path::PathBuf, task::Poll};
+use std::{convert::Infallible, io, path::PathBuf, task::Poll};
 
 use http::{HeaderValue, Request, Response, StatusCode, header};
 use mime_guess::mime;
@@ -12,8 +12,10 @@ pub struct ServeDist {
 }
 
 impl ServeDist {
-    pub fn new(root: PathBuf) -> Self {
-        Self { root }
+    pub fn new(root: PathBuf) -> io::Result<Self> {
+        Ok(Self {
+            root: root.canonicalize()?,
+        })
     }
 }
 
@@ -159,7 +161,7 @@ mod tests {
         create_dummy_file(assert_dir_path.clone(), "index.html");
         create_dummy_file(assert_dir_path, "a.txt");
         std::env::set_current_dir(test_dir.path()).unwrap();
-        let serve_dist = ServeDist::new(PathBuf::from("assets"));
+        let serve_dist = ServeDist::new(PathBuf::from("assets")).unwrap();
         let service = ServiceBuilder::new().layer(NonceLayer).service(serve_dist);
         let router = axum::Router::new().fallback_service(service);
         let response = router

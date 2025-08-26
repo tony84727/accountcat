@@ -58,7 +58,7 @@ pub async fn main(arg: &ServerArg) {
             .await
             .unwrap();
     }
-    let serve_ui = ServeDist::new(PathBuf::from("ui/dist"));
+    let serve_ui = ServeDist::new(PathBuf::from("ui/dist")).unwrap();
     let asset_service = ServiceBuilder::new()
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CONTENT_SECURITY_POLICY,
