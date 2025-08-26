@@ -111,11 +111,18 @@ impl<B> Future for ServeDistFuture<B> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, path::PathBuf};
+    use std::{fs::File, io::Write, path::PathBuf};
 
+    use axum::body::{Body, Bytes};
+    use http::Request;
+    use http_body_util::BodyExt;
     use temp_dir::TempDir;
+    use tower::{ServiceBuilder, ServiceExt};
 
-    use crate::serve_dist::build_path;
+    use crate::{
+        csp::NonceLayer,
+        serve_dist::{ServeDist, build_path},
+    };
 
     #[test]
     fn test_build_path_not_exist_to_index() {
@@ -136,5 +143,35 @@ mod tests {
             dist_dir_path.join("index.html"),
             build_path(&dist_dir_path, "/../outside.html")
         );
+    }
+
+    fn create_dummy_file(directory: PathBuf, name: &str) {
+        let mut file = File::create(directory.join(name)).unwrap();
+        file.write_all(format!("content of {name}").as_bytes())
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_serve_dist_allow_specifying_relative_path() {
+        let test_dir = TempDir::new().unwrap();
+        let assert_dir_path = test_dir.path().join("assets");
+        std::fs::create_dir(&assert_dir_path).unwrap();
+        create_dummy_file(assert_dir_path.clone(), "index.html");
+        create_dummy_file(assert_dir_path, "a.txt");
+        std::env::set_current_dir(test_dir.path()).unwrap();
+        let serve_dist = ServeDist::new(PathBuf::from("assets"));
+        let service = ServiceBuilder::new().layer(NonceLayer).service(serve_dist);
+        let router = axum::Router::new().fallback_service(service);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/a.txt")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let response = response.into_body().collect().await.unwrap().to_bytes();
+        assert_eq!(Bytes::from_static(b"content of a.txt"), response);
     }
 }
