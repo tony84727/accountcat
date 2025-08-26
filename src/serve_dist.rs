@@ -46,6 +46,9 @@ pub struct ServeDistFuture<B> {
 
 fn build_path(root: &PathBuf, path: &str) -> PathBuf {
     let joined = root.clone().join(path.strip_prefix("/").unwrap());
+    let Ok(joined) = joined.canonicalize() else {
+        return root.join("index.html");
+    };
     if !joined.starts_with(root) || !joined.is_file() {
         return root.join("index.html");
     }
@@ -103,5 +106,35 @@ impl<B> Future for ServeDistFuture<B> {
                 .unwrap())
         });
         f.as_mut().poll(cx)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{fs::File, path::PathBuf};
+
+    use temp_dir::TempDir;
+
+    use crate::serve_dist::build_path;
+
+    #[test]
+    fn test_build_path_not_exist_to_index() {
+        assert_eq!(
+            PathBuf::from("index.html"),
+            build_path(&PathBuf::new(), "/notexistfile.jpg")
+        );
+    }
+
+    #[test]
+    fn test_cannot_access_parent() {
+        let test_dir = TempDir::new().unwrap();
+        let dist_dir_path = test_dir.path().join("dist");
+        std::fs::create_dir(&dist_dir_path).unwrap();
+        let outside_file_path = test_dir.path().join("outside.html");
+        File::create(&outside_file_path).unwrap();
+        assert_eq!(
+            dist_dir_path.join("index.html"),
+            build_path(&dist_dir_path, "/../outside.html")
+        );
     }
 }
