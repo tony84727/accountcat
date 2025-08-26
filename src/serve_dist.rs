@@ -113,7 +113,11 @@ impl<B> Future for ServeDistFuture<B> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, io::Write, path::PathBuf};
+    use std::{
+        fs::File,
+        io::{Read, Write},
+        path::PathBuf,
+    };
 
     use axum::body::{Body, Bytes};
     use http::Request;
@@ -153,6 +157,26 @@ mod tests {
             .unwrap();
     }
 
+    struct ChangeCwd {
+        original: PathBuf,
+    }
+
+    impl ChangeCwd {
+        fn new(to: PathBuf) -> Self {
+            let instance = Self {
+                original: std::env::current_dir().unwrap(),
+            };
+            std::env::set_current_dir(to).unwrap();
+            instance
+        }
+    }
+
+    impl Drop for ChangeCwd {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.original).unwrap();
+        }
+    }
+
     #[tokio::test]
     async fn test_serve_dist_allow_specifying_relative_path() {
         let test_dir = TempDir::new().unwrap();
@@ -160,7 +184,7 @@ mod tests {
         std::fs::create_dir(&assert_dir_path).unwrap();
         create_dummy_file(assert_dir_path.clone(), "index.html");
         create_dummy_file(assert_dir_path, "a.txt");
-        std::env::set_current_dir(test_dir.path()).unwrap();
+        let _change_cwd = ChangeCwd::new(test_dir.path().into());
         let serve_dist = ServeDist::new(PathBuf::from("assets")).unwrap();
         let service = ServiceBuilder::new().layer(NonceLayer).service(serve_dist);
         let router = axum::Router::new().fallback_service(service);
@@ -175,5 +199,32 @@ mod tests {
             .unwrap();
         let response = response.into_body().collect().await.unwrap().to_bytes();
         assert_eq!(Bytes::from_static(b"content of a.txt"), response);
+    }
+
+    #[tokio::test]
+    async fn test_serve_binary() {
+        let image = "ui/src/logo.png";
+        let test_dir = TempDir::new().unwrap();
+        std::fs::copy(image, test_dir.path().join("logo.png")).unwrap();
+        let serve_dist = ServeDist::new(test_dir.path().into()).unwrap();
+        let service = ServiceBuilder::new().layer(NonceLayer).service(serve_dist);
+        let router = axum::Router::new().fallback_service(service);
+        let response = router
+            .oneshot(
+                Request::builder()
+                    .uri("/logo.png")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let response = response.into_body().collect().await.unwrap().to_bytes();
+        let expected_bytes = {
+            let mut f = File::open(image).unwrap();
+            let mut buf = Vec::new();
+            f.read_to_end(&mut buf).unwrap();
+            buf
+        };
+        assert_eq!(expected_bytes, response);
     }
 }
