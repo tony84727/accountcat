@@ -5,10 +5,9 @@ import Box from "@mui/material/Box";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import Toolbar from "@mui/material/Toolbar";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
-import { lazy, useContext, useEffect, useMemo, useState } from "react";
+import { lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router";
 import Bar from "./Bar.tsx";
-import GsiContext from "./GsiContext.ts";
 import GsiContextProvider from "./GsiContextProvider.tsx";
 import MenuDrawer from "./MenuDrawer.tsx";
 import { UserClient } from "./proto/UserServiceClientPb";
@@ -22,7 +21,6 @@ const Intro = lazy(() => import("./Intro.tsx"));
 const theme = createTheme(themeConfig);
 
 const App = () => {
-	const gsi = useContext(GsiContext);
 	const emotionCache = useMemo(
 		() =>
 			createCache({
@@ -48,7 +46,6 @@ const App = () => {
 					<BrowserRouter>
 						<Bar openDrawer={() => setDrawerOpen(true)}></Bar>
 						<MenuDrawer
-							username={gsi.username}
 							open={drawerOpen}
 							onClose={() => setDrawerOpen(false)}
 						/>
