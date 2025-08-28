@@ -44,6 +44,7 @@ import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import {
 	Amount,
 	AmountType,
+	DeleteItem,
 	type Item,
 	NewItem,
 	NewTag,
@@ -88,6 +89,7 @@ export default function Accounting() {
 		useState<(event: SelectChangeEvent) => void>();
 	const [onAmountTypeChange, registerOnAmountTypeChange] =
 		useState<(amountType: AmountType) => void>();
+	const [onDeleteItem, registerOnDeleteItem] = useState<(id: string) => void>();
 	const [name, setName] = useState<string>("");
 	const [amount, setAmount] = useState<string>("0");
 	const [amountType, setAmountType] = useState<AmountType>(AmountType.EXPENSE);
@@ -113,6 +115,7 @@ export default function Accounting() {
 		const amountTypeChange$ = createCallback(registerOnAmountTypeChange);
 		const reset$: Observable<unknown> = defer(() => addResult$);
 		const currencyChange$ = createCallback(registerOnCurrencyChange);
+		const deleteItem$ = createCallback(registerOnDeleteItem);
 		const currencies$ = defer(() =>
 			accountingService.listCurrency(new Empty()),
 		).pipe(
@@ -158,7 +161,16 @@ export default function Accounting() {
 			}),
 			share(),
 		);
+		const deleteResult$ = deleteItem$.pipe(
+			switchMap((id) => {
+				const deleteItem = new DeleteItem();
+				deleteItem.setId(id);
+				return accountingService.delete(deleteItem);
+			}),
+			share(),
+		);
 		const items$ = addResult$.pipe(
+			mergeWith(deleteResult$),
 			startWith(undefined),
 			switchMap(() => accountingService.list(new Empty())),
 			map((list) => list.getItemsList()),
@@ -308,6 +320,7 @@ export default function Accounting() {
 							<TableCell>金額</TableCell>
 							<TableCell>幣別</TableCell>
 							<TableCell>時間</TableCell>
+							<TableCell>管理</TableCell>
 						</TableRow>
 					</TableHead>
 					<TableBody>
@@ -327,6 +340,15 @@ export default function Accounting() {
 								</TableCell>
 								<TableCell>{item.getAmount()?.getCurrency()}</TableCell>
 								<TableCell>{formatTimestamp(item.getCreatedAt())} </TableCell>
+								<TableCell>
+									<Button
+										variant="outlined"
+										color="error"
+										onClick={() => onDeleteItem?.(item.getId())}
+									>
+										刪除
+									</Button>
+								</TableCell>
 							</TableRow>
 						))}
 					</TableBody>

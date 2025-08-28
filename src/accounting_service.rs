@@ -8,8 +8,8 @@ use tracing::error;
 use crate::{
     auth::IdClaimExtractor,
     idl::accounting::{
-        Amount, AmountType, CurrencyList, Item, ItemList, NewItem, NewTag, Tag, TagList, TagSearch,
-        accounting_server::Accounting,
+        Amount, AmountType, CurrencyList, DeleteItem, Item, ItemList, NewItem, NewTag, Tag,
+        TagList, TagSearch, accounting_server::Accounting,
     },
     protobufutils::to_proto_timestamp,
     server::ServerState,
@@ -182,5 +182,27 @@ returning tags.id, tags.name",
             .map(|x| String::from(x.code()))
             .collect();
         Ok(Response::new(CurrencyList { code }))
+    }
+
+    async fn delete(&self, request: Request<DeleteItem>) -> tonic::Result<Response<()>> {
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let DeleteItem { id } = request.into_inner();
+        let Ok(id) = id.parse::<i32>() else {
+            return Ok(Response::new(()));
+        };
+        if let Err(err) = sqlx::query!(
+            r#"delete from accounting_items
+using users
+where users.google_sub = $1 and accounting_items.id = $2 and accounting_items.user_id = users.id"#,
+            claims.sub,
+            id,
+        )
+        .execute(&self.state.database)
+        .await
+        {
+            error!(action = "delete accounting item", error = ?err);
+            return Err(Status::internal(String::new()));
+        }
+        Ok(Response::new(()))
     }
 }
