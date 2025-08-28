@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "delete from accounting_items\nusing users\nwhere users.google_sub = $1 and accounting_items.id = $2 and accounting_items.user_id = users.id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "55a52e9a2c6b61cdd1580592a315af376cbb31e8f6f6bdb018abb6e2acf70c96"
+}
