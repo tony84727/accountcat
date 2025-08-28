@@ -3,8 +3,12 @@ import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
+import { useContext } from "react";
+import GoogleSignInButton from "./GoogleSignInButton";
+import GsiContext from "./GsiContext";
 import Logo from "./logo.png";
 export default function Intro() {
+	const gsiContext = useContext(GsiContext);
 	return (
 		<Grid
 			container
@@ -44,6 +48,12 @@ export default function Intro() {
 						原始碼
 					</Button>
 				</Grid>
+				{!gsiContext.username && (
+					<div>
+						<Typography>尚未登入，請先登入</Typography>
+						<GoogleSignInButton />
+					</div>
+				)}
 			</Grid>
 		</Grid>
 	);
