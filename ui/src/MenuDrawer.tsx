@@ -6,13 +6,13 @@ import MenuList from "@mui/material/MenuList";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import classNames from "classnames";
-import { useCallback } from "react";
+import { useCallback, useContext, useMemo } from "react";
 import { Link } from "react-router";
+import GsiContext from "./GsiContext";
 import styles from "./MenuDrawer.module.scss";
 import { useRouteMatchCurrentTab } from "./muiutils";
 
 interface Props extends DrawerProps {
-	username?: string;
 	onClose?(): void;
 }
 
@@ -32,13 +32,11 @@ function NavMenuItem({ to, selected, onClick, label }: NavMenuItemProps) {
 		</Link>
 	);
 }
-export default function MenuDrawer({
-	username,
-	onClose,
-	...drawerProps
-}: Props) {
+export default function MenuDrawer({ onClose, ...drawerProps }: Props) {
 	const currentTab = useRouteMatchCurrentTab(["/todo/*", "/accounting/*"]);
 	const menuClicked = useCallback(() => onClose?.(), [onClose]);
+	const gsi = useContext(GsiContext);
+	const username = useMemo(() => gsi.username, [gsi.username]);
 	return (
 		<Drawer {...drawerProps} onClose={onClose}>
 			<Toolbar sx={{ minWidth: "190px" }}>
