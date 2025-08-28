@@ -5,29 +5,26 @@ import Tabs from "@mui/material/Tabs";
 import Toolbar from "@mui/material/Toolbar";
 import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
+import { useContext, useMemo } from "react";
 import { Link } from "react-router";
 import styles from "./Bar.module.scss";
-import GoogleSignIn, { type Response } from "./GoogleSignIn";
+import GoogleSignIn from "./GoogleSignIn";
+import GsiContext from "./GsiContext";
 import LinkTab from "./LinkTab";
 import { useRouteMatchCurrentTab } from "./muiutils";
 
 interface Props {
-	username?: string;
-	promptLogin?: boolean;
-	onLogin(response: Response): void;
 	openDrawer?(): void;
 }
 
-export default function Bar({
-	username,
-	promptLogin,
-	onLogin,
-	openDrawer,
-}: Props) {
+export default function Bar({ openDrawer }: Props) {
 	const currentTab = useRouteMatchCurrentTab(["/todo/*", "/accounting/*"]);
 	const showDrawerButton = useMediaQuery((theme) =>
 		theme.breakpoints.down("sm"),
 	);
+	const gsi = useContext(GsiContext);
+	const username = useMemo(() => gsi.username, [gsi.username]);
+
 	return (
 		<AppBar position="sticky">
 			<Toolbar sx={{ display: "flex" }}>
@@ -66,7 +63,7 @@ export default function Bar({
 					</Tabs>
 				)}
 				{!showDrawerButton && username && <span>您好，{username}</span>}
-				{promptLogin && <GoogleSignIn loginCallback={onLogin} />}
+				{!username && <GoogleSignIn />}
 			</Toolbar>
 		</AppBar>
 	);
