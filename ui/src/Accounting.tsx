@@ -40,6 +40,7 @@ import {
 } from "rxjs";
 import styles from "./Accounting.module.scss";
 import AmountTypeSwitch from "./AmountTypeSwitch";
+import formatInputNumber from "./formatInputNumber";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import {
 	Amount,
@@ -133,6 +134,7 @@ export default function Accounting() {
 		const amount$ = amountChange$.pipe(
 			startWith("0"),
 			mergeWith(reset$.pipe(map(() => "0"))),
+			map(formatInputNumber),
 		);
 		const selectedTags$ = selectedTagChange$.pipe(
 			map(([, selected]) => selected.filter((x) => !x.create)),
@@ -264,6 +266,7 @@ export default function Accounting() {
 							onChange={onAmountTypeChange}
 						/>
 						<TextField
+							inputMode="decimal"
 							label="金額"
 							value={amount}
 							sx={{ fontSize: 40 }}

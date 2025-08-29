@@ -36,6 +36,9 @@ jobs:
     - name: Lint by biome
       working-directory: ui
       run: npx biome ci
+    - name: Run test
+      working-directory: ui
+      run: npx rstest
     - name: Build
       working-directory: ui
       run: make
