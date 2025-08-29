@@ -266,7 +266,6 @@ export default function Accounting() {
 							onChange={onAmountTypeChange}
 						/>
 						<TextField
-							inputMode="decimal"
 							label="金額"
 							value={amount}
 							sx={{ fontSize: 40 }}
@@ -278,6 +277,7 @@ export default function Accounting() {
 							slotProps={{
 								htmlInput: {
 									sx: { textAlign: "end", fontWeight: 900 },
+									inputMode: "decimal",
 								},
 							}}
 							onChange={onAmountChange}
