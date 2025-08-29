@@ -266,6 +266,7 @@ export default function Accounting() {
 							onChange={onAmountTypeChange}
 						/>
 						<TextField
+							inputMode="decimal"
 							label="金額"
 							value={amount}
 							sx={{ fontSize: 40 }}
