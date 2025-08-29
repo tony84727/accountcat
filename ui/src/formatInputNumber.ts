@@ -1,5 +1,5 @@
 export default function formatInputNumber(input: string): string {
-	const matches = input.replace(/[^\d.]/, "").match(/\d+.?(\d+)?/);
+	const matches = input.replace(/[^\d.]/g, "").match(/\d+.?(\d+)?/);
 	if (!matches) {
 		return "0";
 	}

@@ -20,5 +20,6 @@ describe("formatInputNumber", () => {
 	});
 	test("should remove charaters other that digits and deciaml seperator", () => {
 		expect(formatInputNumber("10,0")).toBe("100");
+		expect(formatInputNumber("12b3ac")).toBe("123");
 	});
 });
