@@ -18,4 +18,11 @@ export default defineConfig({
 	security: {
 		nonce: "__CSP_NONCE__",
 	},
+	tools: {
+		rspack: {
+			experiments: {
+				lazyBarrel: false,
+			},
+		},
+	},
 });
