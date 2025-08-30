@@ -2,7 +2,7 @@ Accountcat
 ==========
 
 Personal finace helper.  
-The project is still early stage. The development prioirty will focus on issues found when dogfooding to make it a useful daily driver for the author.
+The project is still early stage. The development priority will focus on issues found when dogfooding to make it a useful daily driver for the author.
 
 ## Demo
 Demo hosted on render.com free-tier: https://accountcat-demo.onrender.com/  
