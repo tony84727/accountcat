@@ -32,7 +32,11 @@ pub struct ServerState {
     pub jwt_verify: JwtVerifier,
 }
 
-pub async fn init_state(Config { login, database }: &Config) -> ServerState {
+pub async fn init_state(
+    Config {
+        login, database, ..
+    }: &Config,
+) -> ServerState {
     let verifier = JwtVerifier::new(jwtutils::DEFAULT_JWK_URL, login.client_id.clone())
         .await
         .expect("init jwt verifier");
@@ -82,6 +86,7 @@ pub async fn main(arg: &ServerArg) {
     let accounting_api = AccountingServer::new(accounting_service::AccountingApi::new(
         server_state.clone(),
         id_claim_extractor.clone(),
+        loaded_config.hashids.salt,
     ));
     let mut grpc_server_builder = tonic::service::Routes::builder();
     grpc_server_builder.add_service(user_api);
