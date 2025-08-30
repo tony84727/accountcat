@@ -10,10 +10,14 @@ RUN make
 
 FROM rust:1.89-alpine3.21 AS compile_server
 RUN apk --no-cache add build-base openssl-dev openssl-libs-static protoc protobuf-dev
+RUN --mount=type=cache,target=/root/.cargo cargo install sccache --locked
 WORKDIR /project
 ENV SQLX_OFFLINE=true
 ADD . .
-RUN --mount=type=cache,target=/root/.cargo --mount=type=cache,target=/project/target cargo build --release && mkdir -p /project/bin && cp /project/target/release/accountcat /project/bin/accountcat
+RUN --mount=type=cache,target=/root/.cargo \
+    --mount=type=cache,target=/project/target \
+    --mount=type=cache,target=/root/.cache/sccache \
+    RUSTC_WRAPPER=/usr/local/cargo/bin/sccache cargo build --release && mkdir -p /project/bin && cp /project/target/release/accountcat /project/bin/accountcat
 
 FROM alpine:3.21
 WORKDIR /opt/accountcat
