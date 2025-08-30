@@ -10,6 +10,7 @@ dependencies = [
  "base64",
  "clap",
  "futures",
+ "hash-ids",
  "http",
  "http-body-util",
  "iso_currency",
@@ -761,6 +762,12 @@ dependencies = [
  "tokio-util",
  "tracing",
 ]
+
+[[package]]
+name = "hash-ids"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e637affe86ae6203fb90b3802aa235f00910799b60fbead4d770c42d3495a3af"
 
 [[package]]
 name = "hashbrown"

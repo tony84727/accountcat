@@ -10,6 +10,7 @@ use sqlx::{
 pub struct Config {
     pub login: Login,
     pub database: Database,
+    pub hashids: HashIds,
 }
 
 impl Config {
@@ -22,6 +23,7 @@ impl Config {
 pub struct ConfigFile {
     pub login: Option<Login>,
     pub database: Option<Database>,
+    pub hashids: Option<HashIds>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -30,13 +32,19 @@ pub struct Login {
     pub client_id: SecretString,
 }
 
+#[derive(Serialize, Deserialize)]
+pub struct HashIds {
+    #[serde(serialize_with = "serialize_secret")]
+    pub salt: SecretString,
+}
+
 pub fn load() -> Result<Config, LoadError> {
     let config_file: Option<ConfigFile> = std::fs::read_to_string("server.toml")
         .ok()
         .and_then(|content| toml::from_str(&content).ok());
-    let (login, database) = match config_file {
-        Some(database) => (database.login, database.database),
-        None => (None, None),
+    let (login, database, hashids) = match config_file {
+        Some(config_file) => (config_file.login, config_file.database, config_file.hashids),
+        None => (None, None, None),
     };
     let login: Login = std::env::var("GOOGLE_LOGIN_CLIENT_ID")
         .ok()
@@ -48,7 +56,18 @@ pub fn load() -> Result<Config, LoadError> {
     let database = Database::from_env()
         .or(database)
         .or(Some(Default::default()));
-    Ok(Config { login, database })
+    let hashids = std::env::var("HASHIDS_SALT")
+        .ok()
+        .map(|salt| HashIds {
+            salt: SecretString::from(salt),
+        })
+        .or(hashids)
+        .ok_or(LoadError::MissingEssentialValue("hashids.salt"))?;
+    Ok(Config {
+        login,
+        database,
+        hashids,
+    })
 }
 
 #[derive(Debug)]

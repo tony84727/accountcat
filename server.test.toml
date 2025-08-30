@@ -3,3 +3,6 @@ client_id = "dummy"
 
 [database]
 host = "database"
+
+[hashids]
+salt = "dummy"

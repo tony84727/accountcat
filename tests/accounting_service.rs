@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use accountcat::{
     accounting_service::AccountingApi,
-    config::{self, Config, Login},
+    config::{self, Config, HashIds, Login},
     idl::accounting::{Amount, AmountType, Item, NewItem, accounting_server::Accounting},
     server::init_state,
     testing::{
@@ -27,12 +27,16 @@ async fn test_add_accounting_item() {
             client_id: SecretString::from("dummy"),
         },
         database,
+        hashids: HashIds {
+            salt: SecretString::from("dummy"),
+        },
     })
     .await;
     insert_fake_user(&server_state.database).await.unwrap();
     let accounting_api = AccountingApi::new(
         Arc::new(server_state),
         Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
+        SecretString::from("dummy"),
     );
 
     let test_add =

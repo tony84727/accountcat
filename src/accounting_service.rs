@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
+use hash_ids::HashIds;
 use iso_currency::{Currency, IntoEnumIterator};
+use secrecy::{ExposeSecret, SecretString};
 use sqlx::types::BigDecimal;
 use tonic::{Request, Response, Status};
 use tracing::error;
@@ -18,14 +20,26 @@ use crate::{
 pub struct AccountingApi<I> {
     state: Arc<ServerState>,
     id_claim_extractor: Arc<I>,
+    hashids: HashIds,
 }
 
 impl<I> AccountingApi<I> {
-    pub fn new(state: Arc<ServerState>, id_claim_extractor: Arc<I>) -> Self {
+    pub fn new(state: Arc<ServerState>, id_claim_extractor: Arc<I>, salt: SecretString) -> Self {
+        let hashids = HashIds::builder().with_salt(salt.expose_secret()).finish();
         Self {
             state,
             id_claim_extractor,
+            hashids,
         }
+    }
+
+    fn encode_id(&self, id: i32) -> String {
+        self.hashids.encode(&[id as u64])
+    }
+
+    fn decode_id(&self, id: &str) -> Option<i32> {
+        let numbers = self.hashids.decode(id).ok()?;
+        numbers.first().and_then(|&n| i32::try_from(n).ok())
     }
 }
 
@@ -42,7 +56,7 @@ join users on users.id = accounting_items.user_id
 where users.google_sub = $1
 order by accounting_items.created_at desc", claims.sub)
             .map(|x| Item {
-                id: x.id.to_string(),
+                id: self.encode_id(x.id),
                 amount: Some(Amount{
                     amount: x.amount.normalized().to_string(),
                     currency: x.currency,
@@ -115,7 +129,7 @@ where users.google_sub = $2 and tags.id = any($3)",
             .await
             .map_err(|_err| Status::internal(String::new()))?;
         Ok(Response::new(Item {
-            id: item.id.to_string(),
+            id: self.encode_id(item.id),
             name: item.name.unwrap_or_default(),
             amount: Some(Amount {
                 currency: item.currency,
@@ -187,7 +201,7 @@ returning tags.id, tags.name",
     async fn delete(&self, request: Request<DeleteItem>) -> tonic::Result<Response<()>> {
         let claims = self.id_claim_extractor.get_claims(&request).await?;
         let DeleteItem { id } = request.into_inner();
-        let Ok(id) = id.parse::<i32>() else {
+        let Some(id) = self.decode_id(&id) else {
             return Ok(Response::new(()));
         };
         if let Err(err) = sqlx::query!(
