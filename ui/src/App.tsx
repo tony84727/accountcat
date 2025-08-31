@@ -4,6 +4,8 @@ import { CacheProvider } from "@emotion/react";
 import Box from "@mui/material/Box";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import Toolbar from "@mui/material/Toolbar";
+import { LocalizationProvider } from "@mui/x-date-pickers";
+import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import { lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router";
@@ -42,37 +44,39 @@ const App = () => {
 	return (
 		<CacheProvider value={emotionCache}>
 			<ThemeProvider theme={theme}>
-				<GsiContextProvider clientId={clientId}>
-					<BrowserRouter>
-						<Bar openDrawer={() => setDrawerOpen(true)}></Bar>
-						<MenuDrawer
-							open={drawerOpen}
-							onClose={() => setDrawerOpen(false)}
-						/>
-						<Box>
-							<Toolbar />
-							<Routes>
-								<Route index element={<Intro />} />
-								<Route
-									path="/todo/*"
-									element={
-										<RequireLogin>
-											<TodoList />
-										</RequireLogin>
-									}
-								/>
-								<Route
-									path="/accounting/*"
-									element={
-										<RequireLogin>
-											<Accounting />
-										</RequireLogin>
-									}
-								/>
-							</Routes>
-						</Box>
-					</BrowserRouter>
-				</GsiContextProvider>
+				<LocalizationProvider dateAdapter={AdapterDateFns}>
+					<GsiContextProvider clientId={clientId}>
+						<BrowserRouter>
+							<Bar openDrawer={() => setDrawerOpen(true)}></Bar>
+							<MenuDrawer
+								open={drawerOpen}
+								onClose={() => setDrawerOpen(false)}
+							/>
+							<Box>
+								<Toolbar />
+								<Routes>
+									<Route index element={<Intro />} />
+									<Route
+										path="/todo/*"
+										element={
+											<RequireLogin>
+												<TodoList />
+											</RequireLogin>
+										}
+									/>
+									<Route
+										path="/accounting/*"
+										element={
+											<RequireLogin>
+												<Accounting />
+											</RequireLogin>
+										}
+									/>
+								</Routes>
+							</Box>
+						</BrowserRouter>
+					</GsiContextProvider>
+				</LocalizationProvider>
 			</ThemeProvider>
 		</CacheProvider>
 	);
