@@ -39,6 +39,7 @@ import {
 	withLatestFrom,
 } from "rxjs";
 import styles from "./Accounting.module.scss";
+import AccountingItemRow from "./AccountingItemRow";
 import AmountTypeSwitch from "./AmountTypeSwitch";
 import formatInputNumber from "./formatInputNumber";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
@@ -56,7 +57,6 @@ import {
 	createMultiArgumentCallback,
 	createNotifier,
 } from "./rxjsutils";
-import { formatTimestamp } from "./time";
 
 type TextFieldChangeEventHandler = FormEventHandler<
 	HTMLInputElement | HTMLTextAreaElement
@@ -328,31 +328,11 @@ export default function Accounting() {
 					</TableHead>
 					<TableBody>
 						{items?.map((item) => (
-							<TableRow key={item.getId()}>
-								<TableCell>{item.getName()} </TableCell>
-								<TableCell
-									className={classNames([
-										styles.amount,
-										{
-											[styles.expense]: item.getType() === AmountType.EXPENSE,
-											[styles.income]: item.getType() === AmountType.INCOME,
-										},
-									])}
-								>
-									{item.getAmount()?.getAmount()}{" "}
-								</TableCell>
-								<TableCell>{item.getAmount()?.getCurrency()}</TableCell>
-								<TableCell>{formatTimestamp(item.getCreatedAt())} </TableCell>
-								<TableCell>
-									<Button
-										variant="outlined"
-										color="error"
-										onClick={() => onDeleteItem?.(item.getId())}
-									>
-										刪除
-									</Button>
-								</TableCell>
-							</TableRow>
+							<AccountingItemRow
+								key={item.getId()}
+								item={item}
+								onDeleteItem={() => onDeleteItem?.(item.getId())}
+							/>
 						))}
 					</TableBody>
 				</Table>
