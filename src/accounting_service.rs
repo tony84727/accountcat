@@ -11,9 +11,9 @@ use crate::{
     auth::IdClaimExtractor,
     idl::accounting::{
         Amount, AmountType, CurrencyList, DeleteItem, Item, ItemList, NewItem, NewTag, Tag,
-        TagList, TagSearch, accounting_server::Accounting,
+        TagList, TagSearch, UpdateItemRequest, accounting_server::Accounting,
     },
-    protobufutils::to_proto_timestamp,
+    protobufutils::{from_proto_timestamp, to_proto_timestamp},
     server::ServerState,
 };
 
@@ -50,7 +50,7 @@ where
 {
     async fn list(&self, request: Request<()>) -> tonic::Result<Response<ItemList>> {
         let claims = self.id_claim_extractor.get_claims(&request).await?;
-        let items = match sqlx::query!("select accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.currency, accounting_items.created_at
+        let items = match sqlx::query!("select accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.currency, accounting_items.created_at, accounting_items.occurred_at
 from accounting_items
 join users on users.id = accounting_items.user_id
 where users.google_sub = $1
@@ -67,7 +67,8 @@ order by accounting_items.created_at desc", claims.sub)
                     AmountType::Income
                 }.into(),
                 name: x.name.unwrap_or_default(),
-                created_at: x.created_at.map(to_proto_timestamp)
+                created_at: x.created_at.map(to_proto_timestamp),
+                occurred_at: Some(to_proto_timestamp(x.occurred_at)),
             })
             .fetch_all(&self.state.database)
             .await {
@@ -99,17 +100,27 @@ order by accounting_items.created_at desc", claims.sub)
         if r#type == (AmountType::Expense as i32) {
             amount = -amount;
         }
-        let item = match sqlx::query!("insert into accounting_items (user_id, name, amount, currency)
+        let item = match sqlx::query!(
+            "insert into accounting_items (user_id, name, amount, currency)
 select users.id, $1, $2, $3
 from users
 where users.google_sub = $4
-returning accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.currency, accounting_items.created_at", name, amount, currency, claims.sub)
-            .fetch_one(&mut *tx)
-            .await {
+returning accounting_items.id,
+          accounting_items.name,
+          accounting_items.amount,
+          accounting_items.currency,
+          accounting_items.created_at,
+          accounting_items.occurred_at",
+            name,
+            amount,
+            currency,
+            claims.sub
+        )
+        .fetch_one(&mut *tx)
+        .await
+        {
             Ok(record) => Ok(record),
-                Err(_err) => {
-                Err(Status::internal(String::new()))
-            },
+            Err(_err) => Err(Status::internal(String::new())),
         }?;
         let tag_id: Vec<i32> = tags.iter().filter_map(|x| x.parse().ok()).collect();
         sqlx::query!(
@@ -142,6 +153,7 @@ where users.google_sub = $2 and tags.id = any($3)",
             }
             .into(),
             created_at: item.created_at.map(to_proto_timestamp),
+            occurred_at: Some(to_proto_timestamp(item.occurred_at)),
         }))
     }
     async fn complete_tag(&self, request: Request<TagSearch>) -> tonic::Result<Response<TagList>> {
@@ -215,6 +227,49 @@ where users.google_sub = $1 and accounting_items.id = $2 and accounting_items.us
         .await
         {
             error!(action = "delete accounting item", error = ?err);
+            return Err(Status::internal(String::new()));
+        }
+        Ok(Response::new(()))
+    }
+
+    async fn update_item(
+        &self,
+        request: Request<UpdateItemRequest>,
+    ) -> tonic::Result<Response<()>> {
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let UpdateItemRequest {
+            id,
+            name,
+            amount,
+            occurred_at,
+        } = request.into_inner();
+        let Some(id) = self.decode_id(&id) else {
+            return Err(Status::invalid_argument("bad id"));
+        };
+        let (amount, currency) = match amount {
+            Some(Amount { currency, amount }) => (Some(amount), Some(currency)),
+            None => (None, None),
+        };
+        let amount = amount.and_then(|x| x.parse::<BigDecimal>().ok());
+        if let Err(err) = sqlx::query!(
+            "update accounting_items
+set name = coalesce($1, name),
+    occurred_at = coalesce($2, occurred_at),
+    amount = coalesce(sign(amount)*$3, amount),
+    currency = coalesce($4, currency)
+from users
+where accounting_items.id = $5 and accounting_items.user_id = users.id and users.google_sub = $6",
+            name,
+            occurred_at.and_then(|x| from_proto_timestamp(x).ok()),
+            amount,
+            currency,
+            id,
+            claims.sub
+        )
+        .execute(&self.state.database)
+        .await
+        {
+            error!(action = "update accounting item", error = ?err);
             return Err(Status::internal(String::new()));
         }
         Ok(Response::new(()))

@@ -28,6 +28,7 @@ message Item {
   Amount amount = 3;
   AmountType type = 4;
   google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp occurred_at = 6;
 }
 
 message ItemList {
@@ -59,6 +60,13 @@ message DeleteItem {
   string id = 1;
 }
 
+message UpdateItemRequest {
+  string id = 1;
+  optional string name = 2;
+  Amount amount = 3;
+  google.protobuf.Timestamp occurred_at = 4;
+}
+
 service Accounting {
   rpc List(google.protobuf.Empty) returns (ItemList) {}
   rpc Add(NewItem) returns (Item) {}
@@ -66,4 +74,5 @@ service Accounting {
   rpc CreateTag(NewTag) returns (Tag) {}
   rpc ListCurrency(google.protobuf.Empty) returns (CurrencyList) {}
   rpc Delete(DeleteItem) returns (google.protobuf.Empty) {}
+  rpc UpdateItem(UpdateItemRequest) returns (google.protobuf.Empty) {}
 }

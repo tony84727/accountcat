@@ -1,0 +1,19 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update accounting_items\nset name = coalesce($1, name),\n    occurred_at = coalesce($2, occurred_at),\n    amount = coalesce(sign(amount)*$3, amount),\n    currency = coalesce($4, currency)\nfrom users\nwhere accounting_items.id = $5 and accounting_items.user_id = users.id and users.google_sub = $6",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Timestamptz",
+        "Numeric",
+        "Varchar",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "607c1fe211c6b141b32fbed1a14c4dbdfbfcc4524aa67d9ba77b234df3eb333e"
+}
