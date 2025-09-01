@@ -9,28 +9,28 @@ use accountcat::{
     },
     protobufutils::to_proto_timestamp,
     server::init_state,
-    testing::{
-        DummyIdClaimExtractor, insert_fake_user, test_database_manager::TestDatabaseManager,
-    },
+    testing::{DummyIdClaimExtractor, insert_fake_user, test_database::TestDatabase},
 };
 use secrecy::SecretString;
 use time::OffsetDateTime;
 use tonic::Request;
 
+async fn create_database() -> TestDatabase {
+    let config = config::load().unwrap();
+    TestDatabase::new(String::from("accountcat-testing-"), config.database)
+        .await
+        .unwrap()
+}
+
 #[tokio::test]
 async fn test_add_accounting_item() {
-    let config = config::load().unwrap();
-    let mut test_manager = TestDatabaseManager::new(
-        String::from("accountcat-testing-"),
-        config.database.clone(),
-        config.database.into(),
-    );
-    let database = test_manager.create().await.unwrap();
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
         login: Login {
             client_id: SecretString::from("dummy"),
         },
-        database,
+        database: database.clone(),
         hashids: HashIds {
             salt: SecretString::from("dummy"),
         },
@@ -92,18 +92,13 @@ async fn test_add_accounting_item() {
 
 #[tokio::test]
 async fn test_update_accounting_item_occurred_at() {
-    let config = config::load().unwrap();
-    let mut test_manager = TestDatabaseManager::new(
-        String::from("accountcat-testing-"),
-        config.database.clone(),
-        config.database.into(),
-    );
-    let database = test_manager.create().await.unwrap();
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
         login: Login {
             client_id: SecretString::from("dummy"),
         },
-        database,
+        database: database.clone(),
         hashids: HashIds {
             salt: SecretString::from("dummy"),
         },
@@ -157,18 +152,13 @@ async fn test_update_accounting_item_occurred_at() {
 
 #[tokio::test]
 async fn test_update_accounting_item_amount_magnitude() {
-    let config = config::load().unwrap();
-    let mut test_manager = TestDatabaseManager::new(
-        String::from("accountcat-testing-"),
-        config.database.clone(),
-        config.database.into(),
-    );
-    let database = test_manager.create().await.unwrap();
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
         login: Login {
             client_id: SecretString::from("dummy"),
         },
-        database,
+        database: database.clone(),
         hashids: HashIds {
             salt: SecretString::from("dummy"),
         },
@@ -229,18 +219,13 @@ async fn test_update_accounting_item_amount_magnitude() {
 
 #[tokio::test]
 async fn test_update_accounting_item_name() {
-    let config = config::load().unwrap();
-    let mut test_manager = TestDatabaseManager::new(
-        String::from("accountcat-testing-"),
-        config.database.clone(),
-        config.database.into(),
-    );
-    let database = test_manager.create().await.unwrap();
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
         login: Login {
             client_id: SecretString::from("dummy"),
         },
-        database,
+        database: database.clone(),
         hashids: HashIds {
             salt: SecretString::from("dummy"),
         },
