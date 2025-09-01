@@ -51,6 +51,7 @@ import {
 	NewItem,
 	NewTag,
 	TagSearch,
+	type UpdateItemRequest,
 } from "./proto/accounting_pb";
 import {
 	createCallback,
@@ -91,6 +92,8 @@ export default function Accounting() {
 	const [onAmountTypeChange, registerOnAmountTypeChange] =
 		useState<(amountType: AmountType) => void>();
 	const [onDeleteItem, registerOnDeleteItem] = useState<(id: string) => void>();
+	const [postUpdate, registerPostUpdate] =
+		useState<(update: UpdateItemRequest) => void>();
 	const [name, setName] = useState<string>("");
 	const [amount, setAmount] = useState<string>("0");
 	const [amountType, setAmountType] = useState<AmountType>(AmountType.EXPENSE);
@@ -116,6 +119,7 @@ export default function Accounting() {
 		const amountTypeChange$ = createCallback(registerOnAmountTypeChange);
 		const reset$: Observable<unknown> = defer(() => addResult$);
 		const currencyChange$ = createCallback(registerOnCurrencyChange);
+		const updateItem$ = createCallback(registerPostUpdate);
 		const deleteItem$ = createCallback(registerOnDeleteItem);
 		const currencies$ = defer(() =>
 			accountingService.listCurrency(new Empty()),
@@ -163,6 +167,10 @@ export default function Accounting() {
 			}),
 			share(),
 		);
+		const updateResult$ = updateItem$.pipe(
+			switchMap((request) => accountingService.updateItem(request)),
+			share(),
+		);
 		const deleteResult$ = deleteItem$.pipe(
 			switchMap((id) => {
 				const deleteItem = new DeleteItem();
@@ -172,7 +180,7 @@ export default function Accounting() {
 			share(),
 		);
 		const items$ = addResult$.pipe(
-			mergeWith(deleteResult$),
+			mergeWith(deleteResult$, updateResult$),
 			startWith(undefined),
 			switchMap(() => accountingService.list(new Empty())),
 			map((list) => list.getItemsList()),
@@ -332,6 +340,7 @@ export default function Accounting() {
 								key={item.getId()}
 								item={item}
 								onDeleteItem={() => onDeleteItem?.(item.getId())}
+								onUpdateItem={postUpdate}
 							/>
 						))}
 					</TableBody>
