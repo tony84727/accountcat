@@ -82,7 +82,11 @@ export default function AccountingItemRow({
 		<TableRow key={item.getId()}>
 			<TableCell>
 				{editing ? (
-					<TextField defaultValue={item.getName()} onChange={onNameChange} />
+					<TextField
+						label="項目"
+						defaultValue={item.getName()}
+						onChange={onNameChange}
+					/>
 				) : (
 					item.getName()
 				)}
@@ -109,6 +113,7 @@ export default function AccountingItemRow({
 			<TableCell onClick={() => setEditing(true)}>
 				{editing ? (
 					<DateTimePicker
+						label="時間"
 						defaultValue={item.getOccurredAt()?.toDate()}
 						onChange={onOccurredAtChange}
 					/>
