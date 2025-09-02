@@ -150,8 +150,12 @@ async fn test_update_accounting_item_occurred_at() {
     assert_eq!(1753599600, item.occurred_at.map(|t| t.seconds).unwrap());
 }
 
-#[tokio::test]
-async fn test_update_accounting_item_amount_magnitude() {
+async fn test_update_accounting_item_amount_magnitude(
+    amount_type: AmountType,
+    origin: &str,
+    modified: &str,
+    expected: &str,
+) {
     let test_database = create_database().await;
     let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
@@ -174,10 +178,10 @@ async fn test_update_accounting_item_amount_magnitude() {
     let req = Request::new(NewItem {
         name: String::from("test item"),
         amount: Some(Amount {
-            amount: String::from("100"),
+            amount: String::from(origin),
             currency: String::from("TWD"),
         }),
-        r#type: AmountType::Expense as i32,
+        r#type: amount_type as i32,
         tags: Default::default(),
     });
     let _response = accounting_api.add(req).await.unwrap();
@@ -196,7 +200,7 @@ async fn test_update_accounting_item_amount_magnitude() {
             name: None,
             amount: Some(Amount {
                 currency: String::from("TWD"),
-                amount: String::from("1000"),
+                amount: String::from(modified),
             }),
             occurred_at: None,
         }))
@@ -209,12 +213,27 @@ async fn test_update_accounting_item_amount_magnitude() {
     assert_eq!(original_item.occurred_at, item.occurred_at);
     assert_eq!(original_item.created_at, item.created_at);
     assert_eq!(
-        "-1000",
+        expected,
         item.amount
             .as_ref()
             .map(|amount| amount.amount.clone())
             .unwrap()
     );
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_amount_magnitude_expense() {
+    test_update_accounting_item_amount_magnitude(AmountType::Expense, "100", "1000", "-1000").await;
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_amount_magnitude_income() {
+    test_update_accounting_item_amount_magnitude(AmountType::Income, "100", "1000", "1000").await;
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_amount_magnitude_zero_income() {
+    test_update_accounting_item_amount_magnitude(AmountType::Income, "0", "1000", "1000").await;
 }
 
 #[tokio::test]
