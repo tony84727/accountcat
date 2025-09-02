@@ -255,7 +255,7 @@ where users.google_sub = $1 and accounting_items.id = $2 and accounting_items.us
             "update accounting_items
 set name = coalesce($1, name),
     occurred_at = coalesce($2, occurred_at),
-    amount = coalesce(sign(amount)*$3, amount),
+    amount = coalesce((case when amount = 0 then 1 else sign(amount) end)*$3, amount),
     currency = coalesce($4, currency)
 from users
 where accounting_items.id = $5 and accounting_items.user_id = users.id and users.google_sub = $6",
