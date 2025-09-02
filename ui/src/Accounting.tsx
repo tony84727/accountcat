@@ -33,6 +33,7 @@ import {
 	share,
 	startWith,
 	switchMap,
+	take,
 	takeUntil,
 	toArray,
 	withLatestFrom,
@@ -40,6 +41,7 @@ import {
 import styles from "./Accounting.module.scss";
 import AccountingItemRow from "./AccountingItemRow";
 import AmountTypeSwitch from "./AmountTypeSwitch";
+import ConfirmDeleteItem from "./ConfirmDeleteItem";
 import formatInputNumber from "./formatInputNumber";
 import MoneyInput from "./MoneyInput";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
@@ -91,7 +93,7 @@ export default function Accounting() {
 		useState<(event: SelectChangeEvent) => void>();
 	const [onAmountTypeChange, registerOnAmountTypeChange] =
 		useState<(amountType: AmountType) => void>();
-	const [onDeleteItem, registerOnDeleteItem] = useState<(id: string) => void>();
+	const [onDeleteItem, registerOnDeleteItem] = useState<(item: Item) => void>();
 	const [postUpdate, registerPostUpdate] =
 		useState<(update: UpdateItemRequest) => void>();
 	const [name, setName] = useState<string>("");
@@ -101,6 +103,9 @@ export default function Accounting() {
 	const [currencies, setCurrencies] = useState<string[]>();
 	const [selectedTags, setSelectedTags] = useState<TagOption[]>([]);
 	const [tagOptions, setTagOptions] = useState<TagOption[]>([]);
+	const [confirmItem, setConfirmItem] = useState<Item>();
+	const [onConfirmDelete, registerOnConfirmDelete] = useState<() => void>();
+	const [onCancelDelete, registerOnCancelDelete] = useState<() => void>();
 	useEffect(() => {
 		const bye$ = new Subject();
 		const accountingService = new AccountingClient("/api");
@@ -118,6 +123,8 @@ export default function Accounting() {
 		const currencyChange$ = createCallback(registerOnCurrencyChange);
 		const updateItem$ = createCallback(registerPostUpdate);
 		const deleteItem$ = createCallback(registerOnDeleteItem);
+		const confirmDelete$ = createNotifier(registerOnConfirmDelete);
+		const cancelDelete$ = createNotifier(registerOnCancelDelete);
 		const currencies$ = defer(() =>
 			accountingService.listCurrency(new Empty()),
 		).pipe(
@@ -168,10 +175,27 @@ export default function Accounting() {
 			switchMap((request) => accountingService.updateItem(request)),
 			share(),
 		);
-		const deleteResult$ = deleteItem$.pipe(
-			switchMap((id) => {
+		const confirmItem$ = deleteItem$.pipe(
+			mergeWith(
+				cancelDelete$.pipe(
+					mergeWith(defer(() => deleteResult$)),
+					map(() => undefined),
+				),
+			),
+		);
+		const confirmedDeleteItem$ = deleteItem$.pipe(
+			switchMap((item) =>
+				confirmDelete$.pipe(
+					map(() => item),
+					take(1),
+					takeUntil(cancelDelete$),
+				),
+			),
+		);
+		const deleteResult$ = confirmedDeleteItem$.pipe(
+			switchMap((item) => {
 				const deleteItem = new DeleteItem();
-				deleteItem.setId(id);
+				deleteItem.setId(item.getId());
 				return accountingService.delete(deleteItem);
 			}),
 			share(),
@@ -251,10 +275,17 @@ export default function Accounting() {
 		currencies$.pipe(takeUntil(bye$)).subscribe(setCurrencies);
 		currency$.pipe(takeUntil(bye$)).subscribe(setCurrency);
 		amountType$.pipe(takeUntil(bye$)).subscribe(setAmountType);
+		confirmItem$.pipe(takeUntil(bye$)).subscribe(setConfirmItem);
+
 		return () => bye$.next(undefined);
 	}, []);
 	return (
 		<Container>
+			<ConfirmDeleteItem
+				item={confirmItem}
+				onClose={onCancelDelete}
+				onConfirm={onConfirmDelete}
+			/>
 			<Grid container>
 				<Grid container gap={1} flexGrow={1} direction="column">
 					<TextField
@@ -323,7 +354,7 @@ export default function Accounting() {
 							<AccountingItemRow
 								key={item.getId()}
 								item={item}
-								onDeleteItem={() => onDeleteItem?.(item.getId())}
+								onDeleteItem={() => onDeleteItem?.(item)}
 								onUpdateItem={postUpdate}
 							/>
 						))}
