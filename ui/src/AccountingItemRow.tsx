@@ -8,10 +8,13 @@ import IconButton from "@mui/material/IconButton";
 import TableCell from "@mui/material/TableCell";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import { DateTimePicker } from "@mui/x-date-pickers/DateTimePicker";
 import { Timestamp } from "google-protobuf/google/protobuf/timestamp_pb";
 import { type ChangeEvent, useCallback, useState } from "react";
+import MoneyInput from "./MoneyInput";
 import {
+	Amount,
 	AmountType,
 	type Item,
 	UpdateItemRequest,
@@ -54,6 +57,18 @@ export default function AccountingItemRow({
 			return state;
 		});
 	}, []);
+	const onAmountChange = useCallback(
+		(amountString: string) => {
+			setUpdate((state) => {
+				const amount = new Amount();
+				amount.setCurrency(item.getAmount()?.getCurrency() ?? "TWD");
+				amount.setAmount(amountString);
+				state?.setAmount(amount);
+				return state;
+			});
+		},
+		[item],
+	);
 	const onOccurredAtChange = useCallback((date: Date | null) => {
 		if (!date) {
 			return;
@@ -72,13 +87,23 @@ export default function AccountingItemRow({
 					item.getName()
 				)}
 			</TableCell>
-			<TableCell
-				sx={{
-					fontWeight: 900,
-					color: item.getType() === AmountType.EXPENSE ? "#e18b8b" : "#56b56f",
-				}}
-			>
-				{item.getAmount()?.getAmount()}
+			<TableCell>
+				{editing ? (
+					<MoneyInput
+						defaultValue={item.getAmount()?.getAmount()}
+						onAmountChange={onAmountChange}
+					/>
+				) : (
+					<Typography
+						sx={{
+							fontWeight: 900,
+							color:
+								item.getType() === AmountType.EXPENSE ? "#e18b8b" : "#56b56f",
+						}}
+					>
+						{item.getAmount()?.getAmount()}
+					</Typography>
+				)}
 			</TableCell>
 			<TableCell>{item.getAmount()?.getCurrency()}</TableCell>
 			<TableCell onClick={() => setEditing(true)}>
