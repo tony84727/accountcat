@@ -13,7 +13,6 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
-import classNames from "classnames";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import {
 	type FormEvent,
@@ -42,6 +41,7 @@ import styles from "./Accounting.module.scss";
 import AccountingItemRow from "./AccountingItemRow";
 import AmountTypeSwitch from "./AmountTypeSwitch";
 import formatInputNumber from "./formatInputNumber";
+import MoneyInput from "./MoneyInput";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import {
 	Amount,
@@ -81,7 +81,7 @@ export default function Accounting() {
 	const [onNameChange, setOnNameChange] =
 		useState<TextFieldChangeEventHandler>();
 	const [onAmountChange, registerOnExpenseChange] =
-		useState<TextFieldChangeEventHandler>();
+		useState<(amount: string) => void>();
 	const [onTagChange, setOnTagChange] =
 		useState<(event: SyntheticEvent, selected: TagOption[]) => void>();
 	const [onTagInputChange, registerOnTagInputChange] =
@@ -95,7 +95,6 @@ export default function Accounting() {
 	const [postUpdate, registerPostUpdate] =
 		useState<(update: UpdateItemRequest) => void>();
 	const [name, setName] = useState<string>("");
-	const [amount, setAmount] = useState<string>("0");
 	const [amountType, setAmountType] = useState<AmountType>(AmountType.EXPENSE);
 	const [currency, setCurrency] = useState<string>("TWD");
 	const [items, setItems] = useState<Item[]>();
@@ -108,9 +107,7 @@ export default function Accounting() {
 		const nameChange$ = createCallback(setOnNameChange).pipe(
 			extractTextFieldValue(),
 		);
-		const amountChange$ = createCallback(registerOnExpenseChange).pipe(
-			extractTextFieldValue(),
-		);
+		const amountChange$ = createCallback(registerOnExpenseChange);
 		const add$ = createNotifier(setOnAdd);
 		const selectedTagChange$ = createMultiArgumentCallback(setOnTagChange);
 		const onTagInputChange$ = createMultiArgumentCallback(
@@ -248,7 +245,6 @@ export default function Accounting() {
 			share(),
 		);
 		name$.pipe(takeUntil(bye$)).subscribe(setName);
-		amount$.pipe(takeUntil(bye$)).subscribe(setAmount);
 		items$.pipe(takeUntil(bye$)).subscribe(setItems);
 		selectedTags$.pipe(takeUntil(bye$)).subscribe(setSelectedTags);
 		tagOptions$.pipe(takeUntil(bye$)).subscribe(setTagOptions);
@@ -273,22 +269,10 @@ export default function Accounting() {
 							value={amountType}
 							onChange={onAmountTypeChange}
 						/>
-						<TextField
-							label="金額"
-							value={amount}
-							sx={{ fontSize: 40 }}
-							className={classNames([
-								styles.grow,
-								styles.amount,
-								styles.amountInput,
-							])}
-							slotProps={{
-								htmlInput: {
-									sx: { textAlign: "end", fontWeight: 900 },
-									inputMode: "decimal",
-								},
-							}}
-							onChange={onAmountChange}
+						<MoneyInput
+							sx={{ flexGrow: 1 }}
+							defaultValue="0"
+							onAmountChange={onAmountChange}
 						/>
 						<FormControl className={styles.currencySelect}>
 							<InputLabel>貨幣</InputLabel>
