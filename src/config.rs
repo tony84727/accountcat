@@ -126,6 +126,12 @@ impl Database {
             database: database.or(other.database),
         }
     }
+
+    pub fn without_name(&self) -> Self {
+        let mut out = self.clone();
+        out.database = None;
+        out
+    }
 }
 
 impl From<Database> for PgConnectOptions {
@@ -138,8 +144,10 @@ impl From<Database> for PgConnectOptions {
         } = value.or(Some(Default::default()));
         let mut options = PgConnectOptions::new()
             .host(&host.unwrap())
-            .username(&user.unwrap())
-            .database(&database.unwrap());
+            .username(&user.unwrap());
+        if let Some(database) = database {
+            options = options.database(&database);
+        }
         if let Some(password) = password {
             options = options.password(password.expose_secret());
         }

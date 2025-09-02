@@ -3,30 +3,34 @@ use std::sync::Arc;
 use accountcat::{
     accounting_service::AccountingApi,
     config::{self, Config, HashIds, Login},
-    idl::accounting::{Amount, AmountType, Item, NewItem, accounting_server::Accounting},
-    server::init_state,
-    testing::{
-        DummyIdClaimExtractor, insert_fake_user, test_database_manager::TestDatabaseManager,
+    idl::accounting::{
+        Amount, AmountType, Item, ItemList, NewItem, UpdateItemRequest,
+        accounting_server::Accounting,
     },
+    protobufutils::to_proto_timestamp,
+    server::init_state,
+    testing::{DummyIdClaimExtractor, insert_fake_user, test_database::TestDatabase},
 };
 use secrecy::SecretString;
+use time::OffsetDateTime;
 use tonic::Request;
+
+async fn create_database() -> TestDatabase {
+    let config = config::load().unwrap();
+    TestDatabase::new(String::from("accountcat-testing-"), config.database)
+        .await
+        .unwrap()
+}
 
 #[tokio::test]
 async fn test_add_accounting_item() {
-    tracing_subscriber::fmt::init();
-    let config = config::load().unwrap();
-    let mut test_manager = TestDatabaseManager::new(
-        String::from("accountcat-testing-"),
-        config.database.clone(),
-        config.database.into(),
-    );
-    let database = test_manager.create().await.unwrap();
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
         login: Login {
             client_id: SecretString::from("dummy"),
         },
-        database,
+        database: database.clone(),
         hashids: HashIds {
             salt: SecretString::from("dummy"),
         },
@@ -84,4 +88,208 @@ async fn test_add_accounting_item() {
             .map(|Item { amount, r#type, .. }| { (amount.unwrap().amount, r#type) })
             .collect::<Vec<(String, i32)>>()
     )
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_occurred_at() {
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
+    let server_state = init_state(&Config {
+        login: Login {
+            client_id: SecretString::from("dummy"),
+        },
+        database: database.clone(),
+        hashids: HashIds {
+            salt: SecretString::from("dummy"),
+        },
+    })
+    .await;
+    insert_fake_user(&server_state.database).await.unwrap();
+    let accounting_api = AccountingApi::new(
+        Arc::new(server_state),
+        Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
+        SecretString::from("dummy"),
+    );
+
+    let req = Request::new(NewItem {
+        name: String::from("test item"),
+        amount: Some(Amount {
+            amount: String::from("100"),
+            currency: String::from("TWD"),
+        }),
+        r#type: AmountType::Expense as i32,
+        tags: Default::default(),
+    });
+    let _response = accounting_api.add(req).await.unwrap();
+    let list_items = || async {
+        let list = accounting_api.list(Request::new(())).await.unwrap();
+        let ItemList { items } = list.into_inner();
+        items
+    };
+    let items = list_items().await;
+    assert_eq!(1, items.len());
+    let original_item = items.first().unwrap();
+    let item_id = original_item.id.clone();
+    let _response = accounting_api
+        .update_item(Request::new(UpdateItemRequest {
+            id: item_id,
+            name: None,
+            amount: None,
+            occurred_at: Some(to_proto_timestamp(
+                OffsetDateTime::from_unix_timestamp(1753599600).unwrap(),
+            )),
+        }))
+        .await
+        .unwrap();
+    let items = list_items().await;
+    assert_eq!(1, items.len());
+    let item = items.first().unwrap();
+    assert_eq!(original_item.name, item.name);
+    assert_eq!(original_item.created_at, item.created_at);
+    assert_eq!(original_item.amount, item.amount);
+    assert_eq!(1753599600, item.occurred_at.map(|t| t.seconds).unwrap());
+}
+
+async fn test_update_accounting_item_amount_magnitude(
+    amount_type: AmountType,
+    origin: &str,
+    modified: &str,
+    expected: &str,
+) {
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
+    let server_state = init_state(&Config {
+        login: Login {
+            client_id: SecretString::from("dummy"),
+        },
+        database: database.clone(),
+        hashids: HashIds {
+            salt: SecretString::from("dummy"),
+        },
+    })
+    .await;
+    insert_fake_user(&server_state.database).await.unwrap();
+    let accounting_api = AccountingApi::new(
+        Arc::new(server_state),
+        Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
+        SecretString::from("dummy"),
+    );
+
+    let req = Request::new(NewItem {
+        name: String::from("test item"),
+        amount: Some(Amount {
+            amount: String::from(origin),
+            currency: String::from("TWD"),
+        }),
+        r#type: amount_type as i32,
+        tags: Default::default(),
+    });
+    let _response = accounting_api.add(req).await.unwrap();
+    let list_items = || async {
+        let list = accounting_api.list(Request::new(())).await.unwrap();
+        let ItemList { items } = list.into_inner();
+        items
+    };
+    let items = list_items().await;
+    assert_eq!(1, items.len());
+    let original_item = items.first().unwrap();
+    let item_id = original_item.id.clone();
+    let _response = accounting_api
+        .update_item(Request::new(UpdateItemRequest {
+            id: item_id,
+            name: None,
+            amount: Some(Amount {
+                currency: String::from("TWD"),
+                amount: String::from(modified),
+            }),
+            occurred_at: None,
+        }))
+        .await
+        .unwrap();
+    let items = list_items().await;
+    assert_eq!(1, items.len());
+    let item = items.first().unwrap();
+    assert_eq!(original_item.name, item.name);
+    assert_eq!(original_item.occurred_at, item.occurred_at);
+    assert_eq!(original_item.created_at, item.created_at);
+    assert_eq!(
+        expected,
+        item.amount
+            .as_ref()
+            .map(|amount| amount.amount.clone())
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_amount_magnitude_expense() {
+    test_update_accounting_item_amount_magnitude(AmountType::Expense, "100", "1000", "-1000").await;
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_amount_magnitude_income() {
+    test_update_accounting_item_amount_magnitude(AmountType::Income, "100", "1000", "1000").await;
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_amount_magnitude_zero_income() {
+    test_update_accounting_item_amount_magnitude(AmountType::Income, "0", "1000", "1000").await;
+}
+
+#[tokio::test]
+async fn test_update_accounting_item_name() {
+    let test_database = create_database().await;
+    let TestDatabase { database } = &test_database;
+    let server_state = init_state(&Config {
+        login: Login {
+            client_id: SecretString::from("dummy"),
+        },
+        database: database.clone(),
+        hashids: HashIds {
+            salt: SecretString::from("dummy"),
+        },
+    })
+    .await;
+    insert_fake_user(&server_state.database).await.unwrap();
+    let accounting_api = AccountingApi::new(
+        Arc::new(server_state),
+        Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
+        SecretString::from("dummy"),
+    );
+
+    let req = Request::new(NewItem {
+        name: String::from("test item"),
+        amount: Some(Amount {
+            amount: String::from("100"),
+            currency: String::from("TWD"),
+        }),
+        r#type: AmountType::Expense as i32,
+        tags: Default::default(),
+    });
+    let _response = accounting_api.add(req).await.unwrap();
+    let list_items = || async {
+        let list = accounting_api.list(Request::new(())).await.unwrap();
+        let ItemList { items } = list.into_inner();
+        items
+    };
+    let items = list_items().await;
+    assert_eq!(1, items.len());
+    let original_item = items.first().unwrap();
+    let item_id = original_item.id.clone();
+    let _response = accounting_api
+        .update_item(Request::new(UpdateItemRequest {
+            id: item_id,
+            name: Some(String::from("test item1")),
+            amount: None,
+            occurred_at: None,
+        }))
+        .await
+        .unwrap();
+    let items = list_items().await;
+    assert_eq!(1, items.len());
+    let item = items.first().unwrap();
+    assert_eq!("test item1", item.name);
+    assert_eq!(original_item.occurred_at, item.occurred_at);
+    assert_eq!(original_item.created_at, item.created_at);
+    assert_eq!(original_item.amount, item.amount);
 }

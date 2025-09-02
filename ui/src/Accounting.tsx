@@ -13,7 +13,6 @@ import TableCell from "@mui/material/TableCell";
 import TableHead from "@mui/material/TableHead";
 import TableRow from "@mui/material/TableRow";
 import TextField from "@mui/material/TextField";
-import classNames from "classnames";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import {
 	type FormEvent,
@@ -39,8 +38,10 @@ import {
 	withLatestFrom,
 } from "rxjs";
 import styles from "./Accounting.module.scss";
+import AccountingItemRow from "./AccountingItemRow";
 import AmountTypeSwitch from "./AmountTypeSwitch";
 import formatInputNumber from "./formatInputNumber";
+import MoneyInput from "./MoneyInput";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import {
 	Amount,
@@ -50,13 +51,13 @@ import {
 	NewItem,
 	NewTag,
 	TagSearch,
+	type UpdateItemRequest,
 } from "./proto/accounting_pb";
 import {
 	createCallback,
 	createMultiArgumentCallback,
 	createNotifier,
 } from "./rxjsutils";
-import { formatTimestamp } from "./time";
 
 type TextFieldChangeEventHandler = FormEventHandler<
 	HTMLInputElement | HTMLTextAreaElement
@@ -80,7 +81,7 @@ export default function Accounting() {
 	const [onNameChange, setOnNameChange] =
 		useState<TextFieldChangeEventHandler>();
 	const [onAmountChange, registerOnExpenseChange] =
-		useState<TextFieldChangeEventHandler>();
+		useState<(amount: string) => void>();
 	const [onTagChange, setOnTagChange] =
 		useState<(event: SyntheticEvent, selected: TagOption[]) => void>();
 	const [onTagInputChange, registerOnTagInputChange] =
@@ -91,8 +92,9 @@ export default function Accounting() {
 	const [onAmountTypeChange, registerOnAmountTypeChange] =
 		useState<(amountType: AmountType) => void>();
 	const [onDeleteItem, registerOnDeleteItem] = useState<(id: string) => void>();
+	const [postUpdate, registerPostUpdate] =
+		useState<(update: UpdateItemRequest) => void>();
 	const [name, setName] = useState<string>("");
-	const [amount, setAmount] = useState<string>("0");
 	const [amountType, setAmountType] = useState<AmountType>(AmountType.EXPENSE);
 	const [currency, setCurrency] = useState<string>("TWD");
 	const [items, setItems] = useState<Item[]>();
@@ -105,9 +107,7 @@ export default function Accounting() {
 		const nameChange$ = createCallback(setOnNameChange).pipe(
 			extractTextFieldValue(),
 		);
-		const amountChange$ = createCallback(registerOnExpenseChange).pipe(
-			extractTextFieldValue(),
-		);
+		const amountChange$ = createCallback(registerOnExpenseChange);
 		const add$ = createNotifier(setOnAdd);
 		const selectedTagChange$ = createMultiArgumentCallback(setOnTagChange);
 		const onTagInputChange$ = createMultiArgumentCallback(
@@ -116,6 +116,7 @@ export default function Accounting() {
 		const amountTypeChange$ = createCallback(registerOnAmountTypeChange);
 		const reset$: Observable<unknown> = defer(() => addResult$);
 		const currencyChange$ = createCallback(registerOnCurrencyChange);
+		const updateItem$ = createCallback(registerPostUpdate);
 		const deleteItem$ = createCallback(registerOnDeleteItem);
 		const currencies$ = defer(() =>
 			accountingService.listCurrency(new Empty()),
@@ -163,6 +164,10 @@ export default function Accounting() {
 			}),
 			share(),
 		);
+		const updateResult$ = updateItem$.pipe(
+			switchMap((request) => accountingService.updateItem(request)),
+			share(),
+		);
 		const deleteResult$ = deleteItem$.pipe(
 			switchMap((id) => {
 				const deleteItem = new DeleteItem();
@@ -172,7 +177,7 @@ export default function Accounting() {
 			share(),
 		);
 		const items$ = addResult$.pipe(
-			mergeWith(deleteResult$),
+			mergeWith(deleteResult$, updateResult$),
 			startWith(undefined),
 			switchMap(() => accountingService.list(new Empty())),
 			map((list) => list.getItemsList()),
@@ -240,7 +245,6 @@ export default function Accounting() {
 			share(),
 		);
 		name$.pipe(takeUntil(bye$)).subscribe(setName);
-		amount$.pipe(takeUntil(bye$)).subscribe(setAmount);
 		items$.pipe(takeUntil(bye$)).subscribe(setItems);
 		selectedTags$.pipe(takeUntil(bye$)).subscribe(setSelectedTags);
 		tagOptions$.pipe(takeUntil(bye$)).subscribe(setTagOptions);
@@ -265,22 +269,10 @@ export default function Accounting() {
 							value={amountType}
 							onChange={onAmountTypeChange}
 						/>
-						<TextField
-							label="金額"
-							value={amount}
-							sx={{ fontSize: 40 }}
-							className={classNames([
-								styles.grow,
-								styles.amount,
-								styles.amountInput,
-							])}
-							slotProps={{
-								htmlInput: {
-									sx: { textAlign: "end", fontWeight: 900 },
-									inputMode: "decimal",
-								},
-							}}
-							onChange={onAmountChange}
+						<MoneyInput
+							sx={{ flexGrow: 1 }}
+							defaultValue="0"
+							onAmountChange={onAmountChange}
 						/>
 						<FormControl className={styles.currencySelect}>
 							<InputLabel>貨幣</InputLabel>
@@ -328,31 +320,12 @@ export default function Accounting() {
 					</TableHead>
 					<TableBody>
 						{items?.map((item) => (
-							<TableRow key={item.getId()}>
-								<TableCell>{item.getName()} </TableCell>
-								<TableCell
-									className={classNames([
-										styles.amount,
-										{
-											[styles.expense]: item.getType() === AmountType.EXPENSE,
-											[styles.income]: item.getType() === AmountType.INCOME,
-										},
-									])}
-								>
-									{item.getAmount()?.getAmount()}{" "}
-								</TableCell>
-								<TableCell>{item.getAmount()?.getCurrency()}</TableCell>
-								<TableCell>{formatTimestamp(item.getCreatedAt())} </TableCell>
-								<TableCell>
-									<Button
-										variant="outlined"
-										color="error"
-										onClick={() => onDeleteItem?.(item.getId())}
-									>
-										刪除
-									</Button>
-								</TableCell>
-							</TableRow>
+							<AccountingItemRow
+								key={item.getId()}
+								item={item}
+								onDeleteItem={() => onDeleteItem?.(item.getId())}
+								onUpdateItem={postUpdate}
+							/>
 						))}
 					</TableBody>
 				</Table>
