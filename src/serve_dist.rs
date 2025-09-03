@@ -213,9 +213,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_serve_binary() {
-        let image = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/src/logo.png");
+        let image = "ui/src/logo.png";
         let test_dir = TempDir::new().unwrap();
-        std::fs::copy(&image, test_dir.path().join("logo.png")).unwrap();
+        std::fs::copy(image, test_dir.path().join("logo.png")).unwrap();
         let serve_dist = ServeDist::new(test_dir.path().into()).unwrap();
         let service = ServiceBuilder::new().layer(NonceLayer).service(serve_dist);
         let router = axum::Router::new().fallback_service(service);
@@ -230,7 +230,7 @@ mod tests {
             .unwrap();
         let response = response.into_body().collect().await.unwrap().to_bytes();
         let expected_bytes = {
-            let mut f = File::open(&image).unwrap();
+            let mut f = File::open(image).unwrap();
             let mut buf = Vec::new();
             f.read_to_end(&mut buf).unwrap();
             buf
