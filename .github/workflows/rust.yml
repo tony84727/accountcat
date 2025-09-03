@@ -28,7 +28,7 @@ jobs:
       with:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Create server.toml
-      run: mv server.test.toml server.toml
+      run: mv accountcat-server/server.test.toml accountcat-server/server.toml
     - uses: Swatinem/rust-cache@v2
     - name: Build
       run: cargo build

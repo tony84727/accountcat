@@ -1,5 +1,4 @@
 /target
-/server.toml
 *.local
 .env
 /compose.override.yaml

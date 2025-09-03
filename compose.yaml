@@ -20,6 +20,7 @@ services:
   database-init:
     build:
       context: .
+      dockerfile: ./accountcat-server/Containerfile
     environment:
       DATABASE_HOST: database
       GOOGLE_LOGIN_CLIENT_ID: dummy
@@ -34,6 +35,7 @@ services:
       - 8080:3000
     build:
       context: .
+      dockerfile: ./accountcat-server/Containerfile
     environment:
       DATABASE_HOST: database
 volumes:
