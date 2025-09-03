@@ -123,13 +123,9 @@ impl<B> Future for ServeDistFuture<B> {
 
 #[cfg(test)]
 mod tests {
-    use std::{
-        fs::File,
-        io::{Read, Write},
-        path::PathBuf,
-    };
+    use std::{fs::File, io::Read, path::PathBuf};
 
-    use axum::body::{Body, Bytes};
+    use axum::body::Body;
     use http::Request;
     use http_body_util::BodyExt;
     use temp_dir::TempDir;
@@ -161,61 +157,11 @@ mod tests {
         );
     }
 
-    fn create_dummy_file(directory: PathBuf, name: &str) {
-        let mut file = File::create(directory.join(name)).unwrap();
-        file.write_all(format!("content of {name}").as_bytes())
-            .unwrap();
-    }
-
-    struct ChangeCwd {
-        original: PathBuf,
-    }
-
-    impl ChangeCwd {
-        fn new(to: PathBuf) -> Self {
-            let instance = Self {
-                original: std::env::current_dir().unwrap(),
-            };
-            std::env::set_current_dir(to).unwrap();
-            instance
-        }
-    }
-
-    impl Drop for ChangeCwd {
-        fn drop(&mut self) {
-            std::env::set_current_dir(&self.original).unwrap();
-        }
-    }
-
-    #[tokio::test]
-    async fn test_serve_dist_allow_specifying_relative_path() {
-        let test_dir = TempDir::new().unwrap();
-        let assert_dir_path = test_dir.path().join("assets");
-        std::fs::create_dir(&assert_dir_path).unwrap();
-        create_dummy_file(assert_dir_path.clone(), "index.html");
-        create_dummy_file(assert_dir_path, "a.txt");
-        let _change_cwd = ChangeCwd::new(test_dir.path().into());
-        let serve_dist = ServeDist::new(PathBuf::from("assets")).unwrap();
-        let service = ServiceBuilder::new().layer(NonceLayer).service(serve_dist);
-        let router = axum::Router::new().fallback_service(service);
-        let response = router
-            .oneshot(
-                Request::builder()
-                    .uri("/a.txt")
-                    .body(Body::empty())
-                    .unwrap(),
-            )
-            .await
-            .unwrap();
-        let response = response.into_body().collect().await.unwrap().to_bytes();
-        assert_eq!(Bytes::from_static(b"content of a.txt"), response);
-    }
-
     #[tokio::test]
     async fn test_serve_binary() {
-        let image = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ui/src/logo.png");
+        let image = "ui/src/logo.png";
         let test_dir = TempDir::new().unwrap();
-        std::fs::copy(&image, test_dir.path().join("logo.png")).unwrap();
+        std::fs::copy(image, test_dir.path().join("logo.png")).unwrap();
         let serve_dist = ServeDist::new(test_dir.path().into()).unwrap();
         let service = ServiceBuilder::new().layer(NonceLayer).service(serve_dist);
         let router = axum::Router::new().fallback_service(service);
@@ -230,7 +176,7 @@ mod tests {
             .unwrap();
         let response = response.into_body().collect().await.unwrap().to_bytes();
         let expected_bytes = {
-            let mut f = File::open(&image).unwrap();
+            let mut f = File::open(image).unwrap();
             let mut buf = Vec::new();
             f.read_to_end(&mut buf).unwrap();
             buf

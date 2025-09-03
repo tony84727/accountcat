@@ -1,13 +1,13 @@
 pub mod accounting_service;
 mod auth;
 pub mod config;
-mod csp;
+pub mod csp;
 pub mod idl;
 pub mod jwtutils;
 pub mod migration;
 pub mod protobufutils;
 mod secret_se;
-mod serve_dist;
+pub mod serve_dist;
 pub mod server;
 pub mod testing;
 mod todolist_service;
