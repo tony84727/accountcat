@@ -10,6 +10,7 @@ pre-commit:
       globL: "*.rs"
       run: cargo fmt
     update-sqlx:
+      root: "accountant-server"
       stage_fixed: true
       globL: "*.rs"
       run: cargo sqlx prepare
