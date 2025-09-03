@@ -3,6 +3,7 @@ use tonic::{Request, async_trait};
 
 use crate::{auth::IdClaimExtractor, jwtutils::Claims};
 
+pub mod cwd;
 pub mod test_database;
 
 pub struct DummyIdClaimExtractor {
