@@ -23,9 +23,12 @@ tools/protoc-gen-js-downloaded/:
 $(PROTO_OUT_DIR):
 	@mkdir -p $@
 
-manifest_build.json:
+../target/release/build_manifest:
+	cargo build --release -p build_manifest
+
+manifest_build.json: ../target/release/build_manifest
 	@rm -f public/*.{png,json}
-	cargo run --release -p build_manifest -- -o public -b $@ -a src/assets/logo.png
+	../target/release/build_manifest -o public -b $@ -a src/assets/logo.png
 
 src/proto/%_pb.js src/proto/%_pb.d.ts: ../proto/%.proto $(GRPC_WEB_PLUGIN) $(JS_PLUGIN) |$(PROTO_OUT_DIR)
 	protoc $(PROTOC_FLAGS) --js_out=import_style=commonjs:src/proto --grpc-web_out=$(GRPC_WEB_OUTPUT_OPTIONS):src/proto $<
