@@ -9,7 +9,7 @@ SERVICE_CLIENT_PBS := $(foreach service,$(SERVICES),src/proto/$(shell echo $(ser
 all: frontend
 
 .PHONY: frontend proto
-frontend: proto src/assets/favicon.ico
+frontend: proto src/assets/favicon.ico manifest_build.json
 	npm run build
 
 proto: $(SERVICES:%=src/proto/%_pb.d.ts) $(SERVICES:%=src/proto/%_pb.js) $(SERVICE_CLIENT_PBS)
@@ -22,6 +22,10 @@ tools/protoc-gen-js-downloaded/:
 
 $(PROTO_OUT_DIR):
 	@mkdir -p $@
+
+manifest_build.json:
+	@rm -f public/*.{png,json}
+	cargo run --release -p build_manifest -- -o public -b $@ -a src/assets/logo.png
 
 src/proto/%_pb.js src/proto/%_pb.d.ts: ../proto/%.proto $(GRPC_WEB_PLUGIN) $(JS_PLUGIN) |$(PROTO_OUT_DIR)
 	protoc $(PROTOC_FLAGS) --js_out=import_style=commonjs:src/proto --grpc-web_out=$(GRPC_WEB_OUTPUT_OPTIONS):src/proto $<

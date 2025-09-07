@@ -15,3 +15,4 @@ dist/
 .idea
 src/proto
 tools
+/manifest_build.json
