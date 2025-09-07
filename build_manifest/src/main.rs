@@ -118,7 +118,7 @@ fn main() {
             .collect(),
         start_url: String::from("/"),
         display: String::from("standalone"),
-        theme_color: String::from("#000000"),
+        theme_color: String::from("#505050"),
         background_color: String::from("#ffffff"),
     };
     let mut buf = Vec::new();
