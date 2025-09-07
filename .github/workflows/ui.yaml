@@ -43,6 +43,7 @@ jobs:
     - name: Run test
       working-directory: ui
       run: npx rstest
+    - uses: Swatinem/rust-cache@v2
     - name: Build
       working-directory: ui
       run: make
