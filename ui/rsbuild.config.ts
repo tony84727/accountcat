@@ -9,6 +9,7 @@ export default defineConfig({
 		meta: {
 			nonce: "__CSP_NONCE__",
 		},
+		favicon: "./src/assets/favicon.ico",
 	},
 	server: {
 		proxy: {
