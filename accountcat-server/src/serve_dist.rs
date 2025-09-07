@@ -159,7 +159,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_serve_binary() {
-        let image = "../ui/src/logo.png";
+        let image = "../ui/src/assets/logo.png";
         let test_dir = TempDir::new().unwrap();
         std::fs::copy(image, test_dir.path().join("logo.png")).unwrap();
         let serve_dist = ServeDist::new(test_dir.path().into()).unwrap();

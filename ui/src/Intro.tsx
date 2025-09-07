@@ -4,9 +4,9 @@ import Button from "@mui/material/Button";
 import Grid from "@mui/material/Grid";
 import Typography from "@mui/material/Typography";
 import { useContext } from "react";
+import Logo from "./assets/logo.png";
 import GoogleSignInButton from "./GoogleSignInButton";
 import GsiContext from "./GsiContext";
-import Logo from "./logo.png";
 export default function Intro() {
 	const gsiContext = useContext(GsiContext);
 	return (

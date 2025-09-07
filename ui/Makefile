@@ -9,7 +9,7 @@ SERVICE_CLIENT_PBS := $(foreach service,$(SERVICES),src/proto/$(shell echo $(ser
 all: frontend
 
 .PHONY: frontend proto
-frontend: proto
+frontend: proto src/assets/favicon.ico
 	npm run build
 
 proto: $(SERVICES:%=src/proto/%_pb.d.ts) $(SERVICES:%=src/proto/%_pb.js) $(SERVICE_CLIENT_PBS)
@@ -29,6 +29,9 @@ src/proto/%_pb.js src/proto/%_pb.d.ts: ../proto/%.proto $(GRPC_WEB_PLUGIN) $(JS_
 .SECONDEXPANSION: $(SERVICE_CLIENT_PBS)
 
 $(SERVICE_CLIENT_PBS): src/proto/%ServiceClientPb.ts: src/proto/$$(shell echo $$*|tr A-Z a-z)_pb.js
+
+src/assets/favicon.ico: src/assets/logo.png
+	ffmpeg -i $< -vf scale="64:-1"  $@
 
 .DELETE_ON_ERROR:
 $(GRPC_WEB_PLUGIN): |tools/

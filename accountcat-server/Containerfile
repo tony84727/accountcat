@@ -1,6 +1,6 @@
 FROM node:24-alpine3.21 AS build_frontend
 
-RUN apk --no-cache add make protoc protobuf-dev sed curl gcompat libstdc++
+RUN apk --no-cache add make protoc protobuf-dev sed curl gcompat libstdc++ ffmpeg
 WORKDIR /project
 ADD ui ui
 ADD proto proto
