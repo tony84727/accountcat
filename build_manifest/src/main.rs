@@ -47,6 +47,7 @@ struct WebManifestBuild {
 }
 
 const ICON_DIMENSIONS: [u32; 2] = [512, 192];
+const PADDING_PRECENTAGE: f32 = 0.05;
 
 fn get_hash(content: &[u8]) -> String {
     let mut hasher = Sha256::new();
@@ -69,17 +70,16 @@ fn main() {
 
     let icon_source = image::open(app_icon).expect("read icon source image");
     let (origin_x, origin_y) = icon_source.dimensions();
-    let margin_precentage = 0.1_f32;
     let mut icon_paths: Vec<String> = Vec::with_capacity(ICON_DIMENSIONS.len());
     for size in ICON_DIMENSIONS.into_iter() {
         let mut output = RgbaImage::new(size, size);
-        let margin = (size as f32 * margin_precentage) as u32;
+        let padding = (size as f32 * PADDING_PRECENTAGE) as u32;
         let scaled = icon_source.resize(
-            size - 2 * margin,
-            size - 2 * margin,
+            size - 2 * padding,
+            size - 2 * padding,
             image::imageops::FilterType::Lanczos3,
         );
-        let scale = (size - 2 * margin) as f32 / origin_x.max(origin_y) as f32;
+        let scale = (size - 2 * padding) as f32 / origin_x.max(origin_y) as f32;
         let scaled_x = origin_x as f32 * scale;
         let scaled_y = origin_y as f32 * scale;
         output
