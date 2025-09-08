@@ -11,6 +11,11 @@ const pages: Page[] = [
 		label: "記帳",
 	},
 	{
+		to: "/insight",
+		route: "/insight/*",
+		label: "財務分析",
+	},
+	{
 		to: "/todo",
 		route: "/todo/*",
 		label: "代辦事項",
