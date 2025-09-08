@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select count(*) filter (where accounting_items.currency = 'TWD') count,\n                    count(*) filter (where accounting_items.currency != 'TWD') unsupported_count,\n    -sum(accounting_items.amount) filter (where accounting_items.amount < 0 and accounting_items.currency = 'TWD') expense,\n    sum(accounting_items.amount) filter (where accounting_items.amount >= 0 and accounting_items.currency = 'TWD') income,\n    date_trunc('day', now(), 'Asia/Taipei') at time zone 'Asia/Taipei' today\nfrom accounting_items\njoin users on users.id = accounting_items.user_id\nwhere users.google_sub = $1\n      and accounting_items.occurred_at >= date_trunc('day', now(), 'Asia/Taipei')\n      and accounting_items.occurred_at < date_trunc('day', now(), 'Asia/Taipei') + interval '1 day' \n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "unsupported_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "expense",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 3,
+        "name": "income",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 4,
+        "name": "today",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "fb7d3f1e1103003330fe589a26cc51497c2a6727136401a4c2b3a6069eab6941"
+}

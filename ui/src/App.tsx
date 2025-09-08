@@ -19,6 +19,7 @@ import themeConfig from "./theme.ts";
 const TodoList = lazy(() => import("./TodoList.tsx"));
 const Accounting = lazy(() => import("./Accounting.tsx"));
 const Intro = lazy(() => import("./Intro.tsx"));
+const Insight = lazy(() => import("./Insight.tsx"));
 
 const theme = createTheme(themeConfig);
 
@@ -61,6 +62,14 @@ const App = () => {
 										element={
 											<RequireLogin>
 												<TodoList />
+											</RequireLogin>
+										}
+									/>
+									<Route
+										path="/insight/*"
+										element={
+											<RequireLogin>
+												<Insight></Insight>
 											</RequireLogin>
 										}
 									/>
