@@ -11,6 +11,7 @@ import { Link } from "react-router";
 import GsiContext from "./GsiContext";
 import styles from "./MenuDrawer.module.scss";
 import { useRouteMatchCurrentTab } from "./muiutils";
+import pages from "./pages";
 
 interface Props extends DrawerProps {
 	onClose?(): void;
@@ -33,7 +34,7 @@ function NavMenuItem({ to, selected, onClick, label }: NavMenuItemProps) {
 	);
 }
 export default function MenuDrawer({ onClose, ...drawerProps }: Props) {
-	const currentTab = useRouteMatchCurrentTab(["/todo/*", "/accounting/*"]);
+	const currentTab = useRouteMatchCurrentTab(pages.map(({ route }) => route));
 	const menuClicked = useCallback(() => onClose?.(), [onClose]);
 	const gsi = useContext(GsiContext);
 	const username = useMemo(() => gsi.username, [gsi.username]);
@@ -51,18 +52,15 @@ export default function MenuDrawer({ onClose, ...drawerProps }: Props) {
 				}}
 			>
 				<MenuList>
-					<NavMenuItem
-						to="/accounting"
-						onClick={menuClicked}
-						selected={currentTab === "/accounting/*"}
-						label="記帳"
-					/>
-					<NavMenuItem
-						to="/todo"
-						onClick={menuClicked}
-						selected={currentTab === "/todo/*"}
-						label="代辦事項"
-					/>
+					{pages.map(({ to, label, route }) => (
+						<NavMenuItem
+							key={label}
+							to={to}
+							onClick={menuClicked}
+							selected={currentTab === route}
+							label={label}
+						/>
+					))}
 				</MenuList>
 				{username && (
 					<>

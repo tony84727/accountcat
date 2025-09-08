@@ -12,13 +12,14 @@ import GoogleSignIn from "./GoogleSignIn";
 import GsiContext from "./GsiContext";
 import LinkTab from "./LinkTab";
 import { useRouteMatchCurrentTab } from "./muiutils";
+import pages from "./pages";
 
 interface Props {
 	openDrawer?(): void;
 }
 
 export default function Bar({ openDrawer }: Props) {
-	const currentTab = useRouteMatchCurrentTab(["/todo/*", "/accounting/*"]);
+	const currentTab = useRouteMatchCurrentTab(pages.map(({ route }) => route));
 	const showDrawerButton = useMediaQuery((theme) =>
 		theme.breakpoints.down("sm"),
 	);
@@ -48,18 +49,15 @@ export default function Bar({ openDrawer }: Props) {
 							},
 						}}
 					>
-						<LinkTab
-							sx={{ color: "white", "&.Mui-selected": { color: "white" } }}
-							to="/accounting"
-							value="/accounting/*"
-							label="記帳"
-						/>
-						<LinkTab
-							sx={{ color: "white", "&.Mui-selected": { color: "white" } }}
-							to="/todo"
-							value="/todo/*"
-							label="代辦事項"
-						/>
+						{pages.map(({ to, route, label }) => (
+							<LinkTab
+								key={label}
+								sx={{ color: "white", "&.Mui-selected": { color: "white" } }}
+								to={to}
+								value={route}
+								label={label}
+							/>
+						))}
 					</Tabs>
 				)}
 				{!showDrawerButton && username && <span>您好，{username}</span>}
