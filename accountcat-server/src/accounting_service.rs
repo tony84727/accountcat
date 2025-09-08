@@ -10,8 +10,8 @@ use tracing::error;
 use crate::{
     auth::IdClaimExtractor,
     idl::accounting::{
-        Amount, AmountType, CurrencyList, DeleteItem, Item, ItemList, NewItem, NewTag, Tag,
-        TagList, TagSearch, UpdateItemRequest, accounting_server::Accounting,
+        Amount, AmountType, CurrencyList, DailySpending, DeleteItem, Item, ItemList, NewItem,
+        NewTag, Tag, TagList, TagSearch, UpdateItemRequest, accounting_server::Accounting,
     },
     protobufutils::{from_proto_timestamp, to_proto_timestamp},
     server::ServerState,
@@ -273,5 +273,48 @@ where accounting_items.id = $5 and accounting_items.user_id = users.id and users
             return Err(Status::internal(String::new()));
         }
         Ok(Response::new(()))
+    }
+    async fn get_daily_spending(
+        &self,
+        request: Request<()>,
+    ) -> tonic::Result<Response<DailySpending>> {
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let state = match sqlx::query!(
+            "select count(*) count,
+    -sum(case when accounting_items.amount < 0 then accounting_items.amount else 0 end) expense,
+    sum(case when accounting_items.amount > 0 then accounting_items.amount else 0 end) income,
+    date_trunc('day', now(), 'Asia/Taipei') at time zone 'Asia/Taipei' today
+from accounting_items
+join users on users.id = accounting_items.user_id
+where users.google_sub = $1
+      and accounting_items.occurred_at >= date_trunc('day', now(), 'Asia/Taipei')
+      and accounting_items.occurred_at < date_trunc('day', now(), 'Asia/Taipei') + interval '1 day'
+",
+            claims.sub
+        )
+        .fetch_one(&self.state.database)
+        .await
+        {
+            Ok(x) => x,
+            Err(err) => {
+                error!(action = "get daily spending", error = ?err);
+                return Err(Status::internal(String::new()));
+            }
+        };
+        Ok(Response::new(DailySpending {
+            income: state
+                .income
+                .map(|x| x.normalized().to_string())
+                .unwrap_or_else(|| String::from("0")),
+            expense: state
+                .expense
+                .map(|x| x.normalized().to_string())
+                .unwrap_or_else(|| String::from("0")),
+            count: state.count.unwrap_or(0),
+            date: state
+                .today
+                .map(|x| x.date().to_string())
+                .unwrap_or_default(),
+        }))
     }
 }

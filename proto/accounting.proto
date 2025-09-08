@@ -67,6 +67,13 @@ message UpdateItemRequest {
   google.protobuf.Timestamp occurred_at = 4;
 }
 
+message DailySpending {
+  string income = 1;
+  string expense = 2;
+  int64 count = 3;
+  string date = 4;
+}
+
 service Accounting {
   rpc List(google.protobuf.Empty) returns (ItemList) {}
   rpc Add(NewItem) returns (Item) {}
@@ -75,4 +82,5 @@ service Accounting {
   rpc ListCurrency(google.protobuf.Empty) returns (CurrencyList) {}
   rpc Delete(DeleteItem) returns (google.protobuf.Empty) {}
   rpc UpdateItem(UpdateItemRequest) returns (google.protobuf.Empty) {}
+  rpc GetDailySpending(google.protobuf.Empty) returns (DailySpending) {} 
 }
