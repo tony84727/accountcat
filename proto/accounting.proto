@@ -72,6 +72,8 @@ message DailySpending {
   string expense = 2;
   int64 count = 3;
   string date = 4;
+  // transaction of non-default currency. Currently, we doesn't support conversion between currencies
+  int64 unsupported_count = 5;
 }
 
 service Accounting {

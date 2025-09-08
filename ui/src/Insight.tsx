@@ -47,6 +47,7 @@ export default function Insight() {
 	const [expense, setExpense] = useState("0");
 	const [date, setDate] = useState("");
 	const [count, setCount] = useState(0);
+	const [unsupportedCount, setUnsupportedCount] = useState(0);
 	useEffect(() => {
 		const bye$ = new Subject();
 		const accountingService = new AccountingClient("/api");
@@ -77,6 +78,12 @@ export default function Insight() {
 				map((response) => response.getDate()),
 			)
 			.subscribe(setDate);
+		dailySpending$
+			.pipe(
+				takeUntil(bye$),
+				map((response) => response.getUnsupportedCount()),
+			)
+			.subscribe(setUnsupportedCount);
 		return () => {
 			bye$.next(undefined);
 		};
@@ -88,7 +95,7 @@ export default function Insight() {
 			<Paper elevation={1} sx={{ padding: 1 }}>
 				<Stack>
 					<Typography fontWeight="bold">
-						本日摘要{date && `(${date})`}
+						本日摘要{date ? `(${date})` : ""}
 					</Typography>
 					<Grid container gap={1}>
 						<ColorBlock label="收入" color="success">
@@ -98,7 +105,12 @@ export default function Insight() {
 							{expense}
 						</ColorBlock>
 					</Grid>
-					<Typography variant="subtitle1">共{count}筆交易</Typography>
+					<Typography variant="subtitle1">
+						共{count}筆交易
+						{unsupportedCount
+							? `(因尚未支援外幣換算，另有${unsupportedCount}筆外幣交易被忽略)`
+							: ""}
+					</Typography>
 				</Stack>
 			</Paper>
 		</Container>
