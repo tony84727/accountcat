@@ -77,8 +77,9 @@ message DailySpending {
 }
 
 message DaySpending {
-  double income = 1;
-  double expense = 2;
+  string date = 1;
+  double income = 2;
+  double expense = 3;
 }
 
 message Last7DayHistogram {

@@ -329,27 +329,26 @@ where users.google_sub = $1
         request: Request<()>,
     ) -> tonic::Result<Response<Last7DayHistogram>> {
         let claims = self.id_claim_extractor.get_claims(&request).await?;
-        let mut data = vec![
-            DaySpending {
-                income: 0.0,
-                expense: 0.0,
-            };
-            7
-        ];
-        let rows = match sqlx::query!(
+        let data = match sqlx::query!(
             "select
-now()::date - date_trunc('day', accounting_items.occurred_at, 'Asia/Taipei') date,
+to_char(histogram.date at time zone 'Asia/Taipei', 'YYYY/MM/DD') date,
 sum(accounting_items.amount) filter (where accounting_items.amount >= 0) income,
 -sum(accounting_items.amount) filter (where accounting_items.amount < 0) expense
-from accounting_items
-join users on users.id = accounting_items.user_id
-where users.google_sub = $1
-and accounting_items.occurred_at >= date_trunc('day', now() - interval '7 days', 'Asia/Taipei')
-and accounting_items.currency = 'TWD'
-group by date_trunc('day', accounting_items.occurred_at, 'Asia/Taipei')
+from generate_series(date_trunc('day', now(), 'Asia/Taipei') - interval '6 days', date_trunc('day', now(), 'Asia/Taipei'), interval '1 day') as histogram(date)
+join users on users.google_sub = $1
+left join accounting_items on accounting_items.user_id = users.id
+and accounting_items.occurred_at >= histogram.date
+and accounting_items.occurred_at < histogram.date + interval '1 day'
+group by histogram.date
+order by histogram.date
 ",
             claims.sub
         )
+        .map(|r| DaySpending {
+            date: r.date.unwrap_or_default(),
+            income: r.income.and_then(|d| d.to_f64()).unwrap_or_default(),
+            expense: r.expense.and_then(|d| d.to_f64()).unwrap_or_default(),
+        })
         .fetch_all(&self.state.database)
         .await
         {
@@ -359,15 +358,6 @@ group by date_trunc('day', accounting_items.occurred_at, 'Asia/Taipei')
                 return Err(Status::internal(String::new()));
             }
         };
-        for r in rows {
-            let Some(PgInterval { days, .. }) = r.date else {
-                continue;
-            };
-            data[days as usize] = DaySpending {
-                expense: r.expense.and_then(|d| d.to_f64()).unwrap_or_default(),
-                income: r.income.and_then(|d| d.to_f64()).unwrap_or_default(),
-            };
-        }
         Ok(Response::new(Last7DayHistogram { data }))
     }
 }
