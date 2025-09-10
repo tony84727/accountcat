@@ -76,6 +76,15 @@ message DailySpending {
   int64 unsupported_count = 5;
 }
 
+message DaySpending {
+  double income = 1;
+  double expense = 2;
+}
+
+message Last7DayHistogram {
+  repeated DaySpending data = 1;
+}
+
 service Accounting {
   rpc List(google.protobuf.Empty) returns (ItemList) {}
   rpc Add(NewItem) returns (Item) {}
@@ -85,4 +94,5 @@ service Accounting {
   rpc Delete(DeleteItem) returns (google.protobuf.Empty) {}
   rpc UpdateItem(UpdateItemRequest) returns (google.protobuf.Empty) {}
   rpc GetDailySpending(google.protobuf.Empty) returns (DailySpending) {} 
+  rpc GetLast7DayHistogram(google.protobuf.Empty) returns (Last7DayHistogram) {}
 }

@@ -16,6 +16,7 @@ dependencies = [
  "iso_currency",
  "jsonwebtoken",
  "mime_guess",
+ "num-traits",
  "pin-project-lite",
  "prost",
  "prost-types",
