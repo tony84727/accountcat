@@ -36,6 +36,20 @@ jobs:
             type=edge
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        id: setup-buildx
+      - name: Cache cache-mount
+        uses: actions/cache@v4
+        id: cache
+        with:
+          path: cache-mount
+          key: cache-mount-${{ hashFiles('accountcat-server/Containerfile') }}
+      - name: Restore Docker cache mounts
+        uses: reproducible-containers/buildkit-cache-dance@v3
+        with:
+          builder: ${{ steps.setup-buildx.outputs.name }}
+          cache-dir: cache-mount
+          dockerfile: accountcat-server/Containerfile
+          skip-extraction: ${{ steps.cache.outputs.cache-hit }}
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
