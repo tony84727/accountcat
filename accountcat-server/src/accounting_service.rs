@@ -339,6 +339,7 @@ join users on users.google_sub = $1
 left join accounting_items on accounting_items.user_id = users.id
 and accounting_items.occurred_at >= histogram.date
 and accounting_items.occurred_at < histogram.date + interval '1 day'
+and accounting_items.currency = 'TWD'
 group by histogram.date
 order by histogram.date
 ",
