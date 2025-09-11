@@ -8,7 +8,7 @@ use accountcat::{
         accounting_server::Accounting,
     },
     protobufutils::to_proto_timestamp,
-    server::init_state,
+    server::{ServerState, init_state},
     testing::{DummyIdClaimExtractor, insert_fake_user, test_database::TestDatabase},
 };
 use secrecy::SecretString;
@@ -22,8 +22,7 @@ async fn create_database() -> TestDatabase {
         .unwrap()
 }
 
-#[tokio::test]
-async fn test_add_accounting_item() {
+async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
     let test_database = create_database().await;
     let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
@@ -36,6 +35,12 @@ async fn test_add_accounting_item() {
         },
     })
     .await;
+    (test_database, server_state)
+}
+
+#[tokio::test]
+async fn test_add_accounting_item() {
+    let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
     let accounting_api = AccountingApi::new(
         Arc::new(server_state),
@@ -92,18 +97,7 @@ async fn test_add_accounting_item() {
 
 #[tokio::test]
 async fn test_update_accounting_item_occurred_at() {
-    let test_database = create_database().await;
-    let TestDatabase { database } = &test_database;
-    let server_state = init_state(&Config {
-        login: Login {
-            client_id: SecretString::from("dummy"),
-        },
-        database: database.clone(),
-        hashids: HashIds {
-            salt: SecretString::from("dummy"),
-        },
-    })
-    .await;
+    let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
     let accounting_api = AccountingApi::new(
         Arc::new(server_state),
@@ -156,18 +150,7 @@ async fn test_update_accounting_item_amount_magnitude(
     modified: &str,
     expected: &str,
 ) {
-    let test_database = create_database().await;
-    let TestDatabase { database } = &test_database;
-    let server_state = init_state(&Config {
-        login: Login {
-            client_id: SecretString::from("dummy"),
-        },
-        database: database.clone(),
-        hashids: HashIds {
-            salt: SecretString::from("dummy"),
-        },
-    })
-    .await;
+    let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
     let accounting_api = AccountingApi::new(
         Arc::new(server_state),
@@ -238,18 +221,7 @@ async fn test_update_accounting_item_amount_magnitude_zero_income() {
 
 #[tokio::test]
 async fn test_update_accounting_item_name() {
-    let test_database = create_database().await;
-    let TestDatabase { database } = &test_database;
-    let server_state = init_state(&Config {
-        login: Login {
-            client_id: SecretString::from("dummy"),
-        },
-        database: database.clone(),
-        hashids: HashIds {
-            salt: SecretString::from("dummy"),
-        },
-    })
-    .await;
+    let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
     let accounting_api = AccountingApi::new(
         Arc::new(server_state),

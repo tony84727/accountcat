@@ -4,7 +4,7 @@ use hash_ids::HashIds;
 use iso_currency::{Currency, IntoEnumIterator};
 use num_traits::ToPrimitive;
 use secrecy::{ExposeSecret, SecretString};
-use sqlx::{postgres::types::PgInterval, types::BigDecimal};
+use sqlx::types::BigDecimal;
 use tonic::{Request, Response, Status};
 use tracing::error;
 
