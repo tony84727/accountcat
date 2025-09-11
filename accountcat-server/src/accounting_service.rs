@@ -2,16 +2,18 @@ use std::sync::Arc;
 
 use hash_ids::HashIds;
 use iso_currency::{Currency, IntoEnumIterator};
+use num_traits::ToPrimitive;
 use secrecy::{ExposeSecret, SecretString};
-use sqlx::types::BigDecimal;
+use sqlx::{postgres::types::PgInterval, types::BigDecimal};
 use tonic::{Request, Response, Status};
 use tracing::error;
 
 use crate::{
     auth::IdClaimExtractor,
     idl::accounting::{
-        Amount, AmountType, CurrencyList, DailySpending, DeleteItem, Item, ItemList, NewItem,
-        NewTag, Tag, TagList, TagSearch, UpdateItemRequest, accounting_server::Accounting,
+        Amount, AmountType, CurrencyList, DailySpending, DaySpending, DeleteItem, Item, ItemList,
+        Last7DayHistogram, NewItem, NewTag, Tag, TagList, TagSearch, UpdateItemRequest,
+        accounting_server::Accounting,
     },
     protobufutils::{from_proto_timestamp, to_proto_timestamp},
     server::ServerState,
@@ -58,7 +60,7 @@ order by accounting_items.created_at desc", claims.sub)
             .map(|x| Item {
                 id: self.encode_id(x.id),
                 amount: Some(Amount{
-                    amount: x.amount.normalized().to_string(),
+                    amount: format_amount(&x.amount),
                     currency: x.currency,
                 }),
                 r#type: if x.amount < BigDecimal::from(0) {
@@ -144,7 +146,7 @@ where users.google_sub = $2 and tags.id = any($3)",
             name: item.name.unwrap_or_default(),
             amount: Some(Amount {
                 currency: item.currency,
-                amount: item.amount.normalized().to_plain_string(),
+                amount: format_amount(&item.amount),
             }),
             r#type: if item.amount < BigDecimal::from(0) {
                 AmountType::Expense
@@ -305,11 +307,13 @@ where users.google_sub = $1
         Ok(Response::new(DailySpending {
             income: state
                 .income
-                .map(|x| x.normalized().to_string())
+                .as_ref()
+                .map(format_amount)
                 .unwrap_or_else(|| String::from("0")),
             expense: state
                 .expense
-                .map(|x| x.normalized().to_string())
+                .as_ref()
+                .map(format_amount)
                 .unwrap_or_else(|| String::from("0")),
             count: state.count.unwrap_or(0),
             unsupported_count: state.unsupported_count.unwrap_or(0),
@@ -319,4 +323,46 @@ where users.google_sub = $1
                 .unwrap_or_default(),
         }))
     }
+
+    async fn get_last7_day_histogram(
+        &self,
+        request: Request<()>,
+    ) -> tonic::Result<Response<Last7DayHistogram>> {
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let data = match sqlx::query!(
+            "select
+to_char(histogram.date at time zone 'Asia/Taipei', 'YYYY/MM/DD') date,
+sum(accounting_items.amount) filter (where accounting_items.amount >= 0) income,
+-sum(accounting_items.amount) filter (where accounting_items.amount < 0) expense
+from generate_series(date_trunc('day', now(), 'Asia/Taipei') - interval '6 days', date_trunc('day', now(), 'Asia/Taipei'), interval '1 day') as histogram(date)
+join users on users.google_sub = $1
+left join accounting_items on accounting_items.user_id = users.id
+and accounting_items.occurred_at >= histogram.date
+and accounting_items.occurred_at < histogram.date + interval '1 day'
+and accounting_items.currency = 'TWD'
+group by histogram.date
+order by histogram.date
+",
+            claims.sub
+        )
+        .map(|r| DaySpending {
+            date: r.date.unwrap_or_default(),
+            income: r.income.and_then(|d| d.to_f64()).unwrap_or_default(),
+            expense: r.expense.and_then(|d| d.to_f64()).unwrap_or_default(),
+        })
+        .fetch_all(&self.state.database)
+        .await
+        {
+            Ok(x) => x,
+            Err(err) => {
+                error!(action = "get last 7 day histogram", error = ?err);
+                return Err(Status::internal(String::new()));
+            }
+        };
+        Ok(Response::new(Last7DayHistogram { data }))
+    }
+}
+
+fn format_amount(a: &BigDecimal) -> String {
+    a.normalized().to_plain_string()
 }

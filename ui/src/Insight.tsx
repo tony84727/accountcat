@@ -9,6 +9,7 @@ import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import { useEffect, useState } from "react";
 import { defer, map, Subject, share, takeUntil } from "rxjs";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
+import WeeklyHistogram from "./WeeklyHistogram";
 
 type PaletteColorKeys = {
 	[K in keyof Palette]-?: Palette[K] extends PaletteColor ? K : never;
@@ -113,6 +114,7 @@ export default function Insight() {
 					</Typography>
 				</Stack>
 			</Paper>
+			<WeeklyHistogram sx={{ marginY: 1 }} />
 		</Container>
 	);
 }
