@@ -42,24 +42,24 @@ export default function WeeklyHistogram({ sx }: { sx?: SxProps }) {
 		<Paper elevation={1} sx={{ padding: 1, ...sx }}>
 			<Stack>
 				<Typography fontWeight="bold">近7日摘要{range}</Typography>
+				<LineChart
+					dataset={dataSet}
+					xAxis={[
+						{ dataKey: "date", scaleType: "band" },
+						{ dataKey: "date", scaleType: "band" },
+					]}
+					series={[
+						{
+							dataKey: "expense",
+							label: "支出",
+						},
+						{
+							dataKey: "income",
+							label: "收入",
+						},
+					]}
+				/>
 			</Stack>
-			<LineChart
-				dataset={dataSet}
-				xAxis={[
-					{ dataKey: "date", scaleType: "band" },
-					{ dataKey: "date", scaleType: "band" },
-				]}
-				series={[
-					{
-						dataKey: "expense",
-						label: "支出",
-					},
-					{
-						dataKey: "income",
-						label: "收入",
-					},
-				]}
-			/>
 		</Paper>
 	);
 }

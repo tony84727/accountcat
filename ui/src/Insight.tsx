@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import { defer, map, Subject, share, takeUntil } from "rxjs";
 import { AccountingClient } from "./proto/AccountingServiceClientPb";
 import WeeklyHistogram from "./WeeklyHistogram";
+import YearlySummary from "./YearlySummary";
 
 type PaletteColorKeys = {
 	[K in keyof Palette]-?: Palette[K] extends PaletteColor ? K : never;
@@ -115,6 +116,7 @@ export default function Insight() {
 				</Stack>
 			</Paper>
 			<WeeklyHistogram sx={{ marginY: 1 }} />
+			<YearlySummary sx={{ marginY: 1 }} />
 		</Container>
 	);
 }
