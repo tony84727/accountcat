@@ -12,8 +12,8 @@ use crate::{
     auth::IdClaimExtractor,
     idl::accounting::{
         Amount, AmountType, CurrencyList, DailySpending, DaySpending, DeleteItem, Item, ItemList,
-        Last7DayHistogram, NewItem, NewTag, Tag, TagList, TagSearch, UpdateItemRequest,
-        accounting_server::Accounting,
+        Last7DayHistogram, MonthlySpending, NewItem, NewTag, Tag, TagList, TagSearch,
+        UpdateItemRequest, YearlySummary, accounting_server::Accounting,
     },
     protobufutils::{from_proto_timestamp, to_proto_timestamp},
     server::ServerState,
@@ -360,6 +360,39 @@ order by histogram.date
             }
         };
         Ok(Response::new(Last7DayHistogram { data }))
+    }
+
+    async fn get_yearly_summary(
+        &self,
+        request: Request<()>,
+    ) -> tonic::Result<Response<YearlySummary>> {
+        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let months = match sqlx::query!("select
+to_char(histogram.date at time zone 'Asia/Taipei', 'MM') date,
+sum(accounting_items.amount) filter (where accounting_items.amount >= 0) income,
+sum(accounting_items.amount) filter (where accounting_items.amount < 0) expense
+from (select date_trunc('year', now(), 'Asia/Taipei') + interval '1' month * i date from generate_series(0,11) as s(i)) as histogram
+join users on users.google_sub = $1
+left join accounting_items on accounting_items.user_id = users.id
+and accounting_items.occurred_at >= histogram.date
+and accounting_items.occurred_at < histogram.date + interval '1 month'
+and accounting_items.currency = 'TWD'
+group by histogram.date
+order by histogram.date", claims.sub)
+            .map(|r| MonthlySpending {
+                date: r.date.unwrap_or_default(),
+                income: r.income.and_then(|d| d.to_f64()).unwrap_or_default(),
+                expense: r.expense.and_then(|d| d.to_f64()).unwrap_or_default()
+            })
+            .fetch_all(&self.state.database)
+            .await {
+            Ok(x) => x,
+            Err(err) => {
+                error!(action = "get yearly summary", error = ?err);
+                return Err(Status::internal(String::new()));
+            }
+        };
+        Ok(Response::new(YearlySummary { months }))
     }
 }
 
