@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use accountcat::{
     accounting_service::AccountingApi,
-    config::{self, Config, HashIds, Login},
+    config::{self, Config, General, HashIds, Login},
     idl::accounting::{
         Amount, AmountType, Item, ItemList, NewItem, UpdateItemRequest,
         accounting_server::Accounting,
@@ -26,6 +26,7 @@ async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
     let test_database = create_database().await;
     let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
+        general: General::default(),
         login: Login {
             client_id: SecretString::from("dummy"),
         },

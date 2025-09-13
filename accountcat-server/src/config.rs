@@ -8,6 +8,7 @@ use sqlx::{
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
+    pub general: General,
     pub login: Login,
     pub database: Database,
     pub hashids: HashIds,
@@ -21,6 +22,7 @@ impl Config {
 
 #[derive(Serialize, Deserialize)]
 pub struct ConfigFile {
+    pub general: Option<General>,
     pub login: Option<Login>,
     pub database: Option<Database>,
     pub hashids: Option<HashIds>,
@@ -38,13 +40,49 @@ pub struct HashIds {
     pub salt: SecretString,
 }
 
+#[derive(Serialize, Deserialize, Default)]
+pub struct General {
+    pub administrators: Option<Vec<String>>,
+}
+
+impl General {
+    pub fn from_env() -> Self {
+        Self {
+            administrators: std::env::var("ADMINISTRATORS")
+                .ok()
+                .map(|a| a.split(",").map(String::from).collect()),
+        }
+    }
+
+    pub fn or(mut self, other: Option<Self>) -> Self {
+        let administrators = other.and_then(|o| o.administrators);
+        self.administrators = self.administrators.or(administrators);
+        self
+    }
+}
+
 pub fn load() -> Result<Config, LoadError> {
-    let config_file: Option<ConfigFile> = std::fs::read_to_string("server.toml")
-        .ok()
-        .and_then(|content| toml::from_str(&content).ok());
-    let (login, database, hashids) = match config_file {
-        Some(config_file) => (config_file.login, config_file.database, config_file.hashids),
-        None => (None, None, None),
+    load_from_string(std::fs::read_to_string("server.toml").ok())
+}
+
+fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
+    let mut config_file: Option<ConfigFile> = None;
+    if let Some(config) = config {
+        match toml::from_str(&config) {
+            Ok(config) => {
+                config_file = Some(config);
+            }
+            Err(err) => return Err(LoadError::Parse(err)),
+        }
+    }
+    let (login, database, hashids, general) = match config_file {
+        Some(config_file) => (
+            config_file.login,
+            config_file.database,
+            config_file.hashids,
+            config_file.general,
+        ),
+        None => (None, None, None, None),
     };
     let login: Login = std::env::var("GOOGLE_LOGIN_CLIENT_ID")
         .ok()
@@ -63,7 +101,9 @@ pub fn load() -> Result<Config, LoadError> {
         })
         .or(hashids)
         .ok_or(LoadError::MissingEssentialValue("hashids.salt"))?;
+    let general = General::from_env().or(general);
     Ok(Config {
+        general,
         login,
         database,
         hashids,
@@ -164,4 +204,42 @@ impl From<Database> for PgPool {
 pub fn print_settings() {
     let config = load().unwrap();
     println!("{}", config.dump());
+}
+
+#[cfg(test)]
+mod tests {
+    use secrecy::ExposeSecret;
+
+    use crate::config::load_from_string;
+
+    #[test]
+    fn test_parse_minimum_config() {
+        let toml = r#"
+[login]
+client_id = "dummy"
+
+[hashids]
+salt = "salt"
+"#;
+        let config = load_from_string(Some(String::from(toml))).unwrap();
+        assert_eq!("dummy", config.login.client_id.expose_secret());
+        assert_eq!("salt", config.hashids.salt.expose_secret());
+        assert!(config.general.administrators.is_none());
+    }
+
+    #[test]
+    fn test_parse_administrators() {
+        let toml = r#"
+[general]
+administrators = ["a", "b","c"]
+[login]
+client_id = "dummy"
+
+[hashids]
+salt = "salt"
+
+"#;
+        let config = load_from_string(Some(String::from(toml))).unwrap();
+        assert_eq!(vec!["a", "b", "c"], config.general.administrators.unwrap());
+    }
 }
