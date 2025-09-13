@@ -39,9 +39,19 @@ pub struct HashIds {
 }
 
 pub fn load() -> Result<Config, LoadError> {
-    let config_file: Option<ConfigFile> = std::fs::read_to_string("server.toml")
-        .ok()
-        .and_then(|content| toml::from_str(&content).ok());
+    load_from_string(std::fs::read_to_string("server.toml").ok())
+}
+
+fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
+    let mut config_file: Option<ConfigFile> = None;
+    if let Some(config) = config {
+        match toml::from_str(&config) {
+            Ok(config) => {
+                config_file = Some(config);
+            }
+            Err(err) => return Err(LoadError::Parse(err)),
+        }
+    }
     let (login, database, hashids) = match config_file {
         Some(config_file) => (config_file.login, config_file.database, config_file.hashids),
         None => (None, None, None),
@@ -164,4 +174,25 @@ impl From<Database> for PgPool {
 pub fn print_settings() {
     let config = load().unwrap();
     println!("{}", config.dump());
+}
+
+#[cfg(test)]
+mod tests {
+    use secrecy::ExposeSecret;
+
+    use crate::config::load_from_string;
+
+    #[test]
+    fn test_parse_minimum_config() {
+        let toml = r#"
+[login]
+client_id = "dummy"
+
+[hashids]
+salt = "salt"
+"#;
+        let config = load_from_string(Some(String::from(toml))).unwrap();
+        assert_eq!("dummy", config.login.client_id.expose_secret());
+        assert_eq!("salt", config.hashids.salt.expose_secret());
+    }
 }
