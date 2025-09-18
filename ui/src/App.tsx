@@ -20,6 +20,7 @@ const TodoList = lazy(() => import("./TodoList.tsx"));
 const Accounting = lazy(() => import("./Accounting.tsx"));
 const Intro = lazy(() => import("./Intro.tsx"));
 const Insight = lazy(() => import("./Insight.tsx"));
+const InstanceSetting = lazy(() => import("./InstanceSetting.tsx"));
 
 const theme = createTheme(themeConfig);
 
@@ -81,6 +82,14 @@ const App = () => {
 											</RequireLogin>
 										}
 									/>
+									<Route
+										path="/instance-settings/*"
+										element={
+											<RequireLogin>
+												<InstanceSetting />
+											</RequireLogin>
+										}
+									></Route>
 								</Routes>
 							</Box>
 						</BrowserRouter>

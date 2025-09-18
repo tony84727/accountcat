@@ -19,11 +19,15 @@ interface Props {
 }
 
 export default function Bar({ openDrawer }: Props) {
-	const currentTab = useRouteMatchCurrentTab(pages.map(({ route }) => route));
+	const gsi = useContext(GsiContext);
+	const routes = useMemo(
+		() => pages(gsi.isAdmin).map(({ route }) => route),
+		[gsi.isAdmin],
+	);
+	const currentTab = useRouteMatchCurrentTab(routes);
 	const showDrawerButton = useMediaQuery((theme) =>
 		theme.breakpoints.down("sm"),
 	);
-	const gsi = useContext(GsiContext);
 	const username = useMemo(() => gsi.username, [gsi.username]);
 
 	return (
@@ -49,7 +53,7 @@ export default function Bar({ openDrawer }: Props) {
 							},
 						}}
 					>
-						{pages.map(({ to, route, label }) => (
+						{pages(gsi.isAdmin).map(({ to, route, label }) => (
 							<LinkTab
 								key={label}
 								sx={{ color: "white", "&.Mui-selected": { color: "white" } }}

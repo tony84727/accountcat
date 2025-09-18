@@ -14,6 +14,7 @@ import { useRouteMatchCurrentTab } from "./muiutils";
 import pages from "./pages";
 
 interface Props extends DrawerProps {
+	isAdmin?: boolean;
 	onClose?(): void;
 }
 
@@ -33,10 +34,18 @@ function NavMenuItem({ to, selected, onClick, label }: NavMenuItemProps) {
 		</Link>
 	);
 }
-export default function MenuDrawer({ onClose, ...drawerProps }: Props) {
-	const currentTab = useRouteMatchCurrentTab(pages.map(({ route }) => route));
-	const menuClicked = useCallback(() => onClose?.(), [onClose]);
+export default function MenuDrawer({
+	onClose,
+	isAdmin,
+	...drawerProps
+}: Props) {
 	const gsi = useContext(GsiContext);
+	const routes = useMemo(
+		() => pages(gsi.isAdmin).map(({ route }) => route),
+		[gsi.isAdmin],
+	);
+	const currentTab = useRouteMatchCurrentTab(routes);
+	const menuClicked = useCallback(() => onClose?.(), [onClose]);
 	const username = useMemo(() => gsi.username, [gsi.username]);
 	return (
 		<Drawer {...drawerProps} onClose={onClose}>
@@ -52,7 +61,7 @@ export default function MenuDrawer({ onClose, ...drawerProps }: Props) {
 				}}
 			>
 				<MenuList>
-					{pages.map(({ to, label, route }) => (
+					{pages(gsi.isAdmin).map(({ to, label, route }) => (
 						<NavMenuItem
 							key={label}
 							to={to}
