@@ -77,6 +77,11 @@ pub async fn main(arg: &ServerArg) {
     let user_api = UserServer::new(user_service::UserApi::new(
         server_state.clone(),
         loaded_config.login.client_id,
+        loaded_config
+            .general
+            .administrators
+            .clone()
+            .unwrap_or_default(),
     ));
     let id_claim_extractor = Arc::new(FromSession);
     let todolist_api = TodolistServer::new(todolist_service::TodolistApi::new(

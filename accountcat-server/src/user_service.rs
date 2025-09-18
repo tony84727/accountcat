@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use secrecy::{ExposeSecret, SecretString};
 use tonic::{Request, Response};
@@ -13,13 +13,19 @@ use crate::{
 pub struct UserApi {
     state: Arc<ServerState>,
     google_client_id: SecretString,
+    administrators: HashSet<String>,
 }
 
 impl UserApi {
-    pub fn new(state: Arc<ServerState>, google_client_id: SecretString) -> Self {
+    pub fn new<A: IntoIterator<Item = String>>(
+        state: Arc<ServerState>,
+        google_client_id: SecretString,
+        administrators: A,
+    ) -> Self {
         Self {
             state,
             google_client_id,
+            administrators: HashSet::from_iter(administrators),
         }
     }
 }
@@ -40,7 +46,8 @@ impl User for UserApi {
             .map_err(|_| tonic::Status::internal(String::new()))?;
         if let Some(subject) = current_subject {
             return Ok(tonic::Response::new(Profile {
-                name: Some(subject.name),
+                name: subject.name,
+                is_admin: self.administrators.contains(&subject.sub),
             }));
         }
         let claims = self
@@ -60,10 +67,11 @@ impl User for UserApi {
             .await
             .map_err(|_| tonic::Status::internal(String::new()))?;
         Ok(tonic::Response::new(Profile {
-            name: Some(claims.name),
+            name: claims.name,
+            is_admin: self.administrators.contains(&claims.sub),
         }))
     }
-    async fn get_name(
+    async fn get_profile(
         &self,
         request: Request<()>,
     ) -> tonic::Result<tonic::Response<Profile>, tonic::Status> {
@@ -80,7 +88,8 @@ impl User for UserApi {
         };
 
         Ok(tonic::Response::new(Profile {
-            name: Some(claims.name),
+            name: claims.name,
+            is_admin: self.administrators.contains(&claims.sub),
         }))
     }
     async fn get_param(&self, _request: Request<()>) -> tonic::Result<tonic::Response<Param>> {

@@ -57,7 +57,7 @@ export default function GsiContextProvider({
 	);
 	useEffect(() => {
 		const userClient = new UserClient("/api");
-		userClient.getName(new Empty()).then((response) => {
+		userClient.getProfile(new Empty()).then((response) => {
 			setUsername(response.getName());
 		});
 	}, []);
