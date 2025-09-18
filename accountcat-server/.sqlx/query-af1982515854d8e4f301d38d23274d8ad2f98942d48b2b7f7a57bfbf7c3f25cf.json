@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update announcements set hidden_at = now() where hidden_at is null",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "af1982515854d8e4f301d38d23274d8ad2f98942d48b2b7f7a57bfbf7c3f25cf"
+}

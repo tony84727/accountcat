@@ -13,19 +13,19 @@ use crate::{
 pub struct UserApi {
     state: Arc<ServerState>,
     google_client_id: SecretString,
-    administrators: HashSet<String>,
+    administrators: Arc<HashSet<String>>,
 }
 
 impl UserApi {
-    pub fn new<A: IntoIterator<Item = String>>(
+    pub fn new(
         state: Arc<ServerState>,
         google_client_id: SecretString,
-        administrators: A,
+        administrators: Arc<HashSet<String>>,
     ) -> Self {
         Self {
             state,
             google_client_id,
-            administrators: HashSet::from_iter(administrators),
+            administrators,
         }
     }
 }

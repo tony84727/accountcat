@@ -8,3 +8,7 @@ pub mod todolist {
 pub mod accounting {
     tonic::include_proto!("accountcat.accounting");
 }
+
+pub mod instance_setting {
+    tonic::include_proto!("accountcat.instance_setting");
+}

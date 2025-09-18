@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into announcements (content) values ($1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c3bd409d93c8cbd21aca4c40667a1ed76a9ef50696169042a68cf046fae47a6c"
+}

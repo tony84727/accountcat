@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+package accountcat.instance_setting;
+
+message Announcement {
+  string content = 1;
+}
+
+service InstanceSetting {
+  rpc SetAnnouncement(Announcement) returns (google.protobuf.Empty) {}
+  rpc RevokeAnnouncement(google.protobuf.Empty) returns (google.protobuf.Empty) {}
+}
