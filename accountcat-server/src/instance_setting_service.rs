@@ -42,12 +42,25 @@ where
         if !self.administrators.contains(&claims.sub) {
             return Err(Status::permission_denied("you're not an admin"));
         }
+        let Ok(mut tx) = self.state.database.begin().await else {
+            return Err(Status::internal(String::new()));
+        };
+        if let Err(err) = sqlx::query!("update announcements set hidden_at = now()
+where id = (select id from announcements where hidden_at is not null order by created_at desc limit 1)")
+            .execute(&mut *tx).await {
+            error!(action = "set announcement", error = ?err);
+            return Err(Status::internal(String::new()));
+        }
         let Announcement { content } = request.into_inner();
-        match sqlx::query!("insert into announcements (content) values ($1)", content)
-            .execute(&self.state.database)
+        if let Err(err) = sqlx::query!("insert into announcements (content) values ($1)", content)
+            .execute(&mut *tx)
             .await
         {
-            Ok(_) => Ok(Response::new(())),
+            error!(action = "set announcement", error = ?err);
+            return Err(Status::internal(String::new()));
+        }
+        match tx.commit().await {
+            Ok(()) => Ok(Response::new(())),
             Err(err) => {
                 error!(action = "set announcement", error = ?err);
                 Err(Status::internal(String::new()))
