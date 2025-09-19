@@ -2,28 +2,21 @@ use std::sync::Arc;
 
 use accountcat::{
     accounting_service::AccountingApi,
-    config::{self, Config, General, HashIds, Login},
+    config::{Config, General, HashIds, Login},
     idl::accounting::{
         Amount, AmountType, Item, ItemList, NewItem, UpdateItemRequest,
         accounting_server::Accounting,
     },
     protobufutils::to_proto_timestamp,
     server::{ServerState, init_state},
-    testing::{DummyIdClaimExtractor, insert_fake_user, test_database::TestDatabase},
+    testing::{self, DummyIdClaimExtractor, insert_fake_user, test_database::TestDatabase},
 };
 use secrecy::SecretString;
 use time::OffsetDateTime;
 use tonic::Request;
 
-async fn create_database() -> TestDatabase {
-    let config = config::load().unwrap();
-    TestDatabase::new(String::from("accountcat-testing-"), config.database)
-        .await
-        .unwrap()
-}
-
 async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
-    let test_database = create_database().await;
+    let test_database = testing::create_database().await;
     let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
         general: General::default(),

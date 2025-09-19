@@ -1,10 +1,11 @@
 use sqlx::PgPool;
 use tonic::{Request, async_trait};
 
-use crate::{auth::IdClaimExtractor, jwtutils::Claims};
+use crate::{auth::IdClaimExtractor, config, jwtutils::Claims};
 
 pub mod cwd;
 pub mod test_database;
+use test_database::TestDatabase;
 
 pub struct DummyIdClaimExtractor {
     claims: Claims,
@@ -43,4 +44,11 @@ pub async fn insert_fake_user(pool: &PgPool) -> sqlx::Result<()> {
     .execute(pool)
     .await?;
     Ok(())
+}
+
+pub async fn create_database() -> TestDatabase {
+    let config = config::load().unwrap();
+    TestDatabase::new(String::from("accountcat-testing-"), config.database)
+        .await
+        .unwrap()
 }
