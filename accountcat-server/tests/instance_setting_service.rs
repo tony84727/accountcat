@@ -58,4 +58,25 @@ async fn test_add_announcement() {
         .await
         .unwrap();
     assert_eq!(Some(1), row.count);
+    let req = Request::new(Announcement {
+        content: String::from("new announcement of website"),
+    });
+    instacne_setting_api.set_announcement(req).await.unwrap();
+    let latest_announcement = sqlx::query!(
+        "select content from announcements where hidden_at is null order by created_at desc, id desc limit 1"
+    )
+    .fetch_one(&server_state.database)
+    .await
+    .unwrap();
+    assert_eq!("new announcement of website", latest_announcement.content);
+    let row = sqlx::query!("select count(*) from announcements")
+        .fetch_one(&server_state.database)
+        .await
+        .unwrap();
+    assert_eq!(Some(2), row.count);
+    let row = sqlx::query!("select count(*) from announcements where hidden_at is null")
+        .fetch_one(&server_state.database)
+        .await
+        .unwrap();
+    assert_eq!(Some(1), row.count);
 }

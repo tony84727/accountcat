@@ -45,9 +45,13 @@ where
         let Ok(mut tx) = self.state.database.begin().await else {
             return Err(Status::internal(String::new()));
         };
-        if let Err(err) = sqlx::query!("update announcements set hidden_at = now()
-where id = (select id from announcements where hidden_at is not null order by created_at desc limit 1)")
-            .execute(&mut *tx).await {
+        if let Err(err) = sqlx::query!(
+            "update announcements set hidden_at = now()
+where id = (select id from announcements where hidden_at is null order by created_at desc limit 1)"
+        )
+        .execute(&mut *tx)
+        .await
+        {
             error!(action = "set announcement", error = ?err);
             return Err(Status::internal(String::new()));
         }
