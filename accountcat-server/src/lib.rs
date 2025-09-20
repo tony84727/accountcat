@@ -3,7 +3,7 @@ mod auth;
 pub mod config;
 pub mod csp;
 pub mod idl;
-mod instance_setting_service;
+pub mod instance_setting_service;
 pub mod jwtutils;
 pub mod migration;
 pub mod protobufutils;
