@@ -5,7 +5,10 @@ package accountcat.user;
 
 message LoginRequest { string token = 1; }
 
-message Profile { optional string name = 1; }
+message Profile {
+  string name = 1;
+  bool is_admin = 2;
+}
 
 message Param {
   string google_client_id = 1;
@@ -13,6 +16,6 @@ message Param {
 
 service User {
   rpc GetParam(google.protobuf.Empty) returns (Param) {}
-  rpc GetName(google.protobuf.Empty) returns (Profile) {}
+  rpc GetProfile(google.protobuf.Empty) returns (Profile) {}
   rpc Login(LoginRequest) returns (Profile) {}
 }

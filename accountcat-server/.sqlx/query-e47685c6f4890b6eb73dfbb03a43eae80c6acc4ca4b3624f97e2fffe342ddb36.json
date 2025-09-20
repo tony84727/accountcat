@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select content from announcements where hidden_at is null order by created_at desc, id desc limit 1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "content",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e47685c6f4890b6eb73dfbb03a43eae80c6acc4ca4b3624f97e2fffe342ddb36"
+}

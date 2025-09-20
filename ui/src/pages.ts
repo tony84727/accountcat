@@ -4,7 +4,15 @@ interface Page {
 	label: string;
 }
 
-const pages: Page[] = [
+const administratorPage: Page[] = [
+	{
+		to: "/instance-settings",
+		route: "/instance-settings/*",
+		label: "系統設定",
+	},
+];
+
+const normalPages: Page[] = [
 	{
 		to: "/accounting",
 		route: "/accounting/*",
@@ -21,4 +29,7 @@ const pages: Page[] = [
 		label: "代辦事項",
 	},
 ];
-export default pages;
+
+export default function pages(isAdmin?: boolean): Page[] {
+	return isAdmin ? [...normalPages, ...administratorPage] : normalPages;
+}

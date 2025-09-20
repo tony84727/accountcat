@@ -1,4 +1,4 @@
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 use axum::Router;
 use clap::Parser;
@@ -17,9 +17,11 @@ use crate::{
     config::{self, Config},
     csp::{CspLayer, NonceLayer, build_csp},
     idl::{
-        accounting::accounting_server::AccountingServer, todolist::todolist_server::TodolistServer,
-        user::user_server::UserServer,
+        accounting::accounting_server::AccountingServer,
+        instance_setting::instance_setting_server::InstanceSettingServer,
+        todolist::todolist_server::TodolistServer, user::user_server::UserServer,
     },
+    instance_setting_service::InstanceSettingApi,
     jwtutils::{self, JwtVerifier},
     serve_dist::ServeDist,
     todolist_service, user_service,
@@ -74,9 +76,17 @@ pub async fn main(arg: &ServerArg) {
         .service(serve_ui);
     let session_store = PostgresStore::new(server_state.database.clone());
     let session_layer = SessionManagerLayer::new(session_store);
+    let administrators = Arc::new(HashSet::from_iter(
+        loaded_config
+            .general
+            .administrators
+            .clone()
+            .unwrap_or_default(),
+    ));
     let user_api = UserServer::new(user_service::UserApi::new(
         server_state.clone(),
         loaded_config.login.client_id,
+        administrators.clone(),
     ));
     let id_claim_extractor = Arc::new(FromSession);
     let todolist_api = TodolistServer::new(todolist_service::TodolistApi::new(
@@ -88,10 +98,16 @@ pub async fn main(arg: &ServerArg) {
         id_claim_extractor.clone(),
         loaded_config.hashids.salt,
     ));
+    let instance_setting_api = InstanceSettingServer::new(InstanceSettingApi::new(
+        server_state.clone(),
+        id_claim_extractor.clone(),
+        administrators.clone(),
+    ));
     let mut grpc_server_builder = tonic::service::Routes::builder();
     grpc_server_builder.add_service(user_api);
     grpc_server_builder.add_service(todolist_api);
     grpc_server_builder.add_service(accounting_api);
+    grpc_server_builder.add_service(instance_setting_api);
     let grpc_server = grpc_server_builder.routes();
 
     let app = Router::new()

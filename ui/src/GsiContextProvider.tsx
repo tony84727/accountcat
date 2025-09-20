@@ -16,6 +16,7 @@ export default function GsiContextProvider({
 }: GsiContextProviderProps) {
 	const [username, setUsername] = useState<string>();
 	const [loaded, setLoaded] = useState(false);
+	const [isAdmin, setIsAdmin] = useState(false);
 	const context = useMemo(
 		() => ({
 			load: () => {
@@ -36,6 +37,7 @@ export default function GsiContextProvider({
 					loginRequest.setToken(response.credential);
 					const loginResponse = await userClient.login(loginRequest);
 					setUsername(loginResponse.getName());
+					setIsAdmin(loginResponse.getIsAdmin());
 				};
 				const loading = new Promise((resolved) => {
 					clientScriptTag.onload = () => {
@@ -52,13 +54,15 @@ export default function GsiContextProvider({
 			},
 			username,
 			loaded,
+			isAdmin,
 		}),
-		[clientId, username, loaded],
+		[clientId, username, loaded, isAdmin],
 	);
 	useEffect(() => {
 		const userClient = new UserClient("/api");
-		userClient.getName(new Empty()).then((response) => {
+		userClient.getProfile(new Empty()).then((response) => {
 			setUsername(response.getName());
+			setIsAdmin(response.getIsAdmin());
 		});
 	}, []);
 	return <GsiContext value={context}>{children}</GsiContext>;

@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update announcements set hidden_at = now()\nwhere id = (select id from announcements where hidden_at is null order by created_at desc limit 1)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "0ea8ced483fbe3bf3f793d18d9ce05e05109a8be183ce85cadcd58066e7855c7"
+}
