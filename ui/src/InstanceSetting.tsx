@@ -25,7 +25,11 @@ import { InstanceSettingClient } from "./proto/Instance_settingServiceClientPb";
 import { Announcement } from "./proto/instance_setting_pb";
 import { createCallback, createNotifier } from "./rxjsutils";
 
-export default function InstanceSetting() {
+interface Props {
+	reloadAnnouncement?(): void;
+}
+
+export default function InstanceSetting({ reloadAnnouncement }: Props) {
 	const [onContentChange, registerOnContentChange] =
 		useState<FormEventHandler<HTMLInputElement | HTMLTextAreaElement>>();
 	const [onSave, registerOnSave] = useState<() => void>();
@@ -75,10 +79,13 @@ export default function InstanceSetting() {
 				),
 			),
 		);
+		saveSuccess$
+			.pipe(mergeWith(revokeSuccess$), takeUntil(bye$))
+			.subscribe(() => reloadAnnouncement?.());
 		showSnackbar$.pipe(takeUntil(bye$)).subscribe(setShowSnackbar);
 		snackbarMessage$.pipe(takeUntil(bye$)).subscribe(setSnackbarMessage);
 		return () => bye$.next(undefined);
-	}, []);
+	}, [reloadAnnouncement]);
 	return (
 		<Container>
 			<Snackbar message={snackbarMessage} open={showSnackbar} />

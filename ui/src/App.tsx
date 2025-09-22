@@ -3,12 +3,12 @@ import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import Box from "@mui/material/Box";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
-import Toolbar from "@mui/material/Toolbar";
 import { LocalizationProvider } from "@mui/x-date-pickers";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { Empty } from "google-protobuf/google/protobuf/empty_pb";
 import { lazy, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router";
+import { Subject } from "rxjs";
 import Bar from "./Bar.tsx";
 import GsiContextProvider from "./GsiContextProvider.tsx";
 import MenuDrawer from "./MenuDrawer.tsx";
@@ -21,6 +21,7 @@ const Accounting = lazy(() => import("./Accounting.tsx"));
 const Intro = lazy(() => import("./Intro.tsx"));
 const Insight = lazy(() => import("./Insight.tsx"));
 const InstanceSetting = lazy(() => import("./InstanceSetting.tsx"));
+const Annoucment = lazy(() => import("./Announcement.tsx"));
 
 const theme = createTheme(themeConfig);
 
@@ -35,6 +36,10 @@ const App = () => {
 		[],
 	);
 	const [clientId, setClientId] = useState<string>();
+	const [reloadAnnouncement$, reloadAnnouncement] = useMemo(() => {
+		const subject$ = new Subject<void>();
+		return [subject$, () => subject$.next(undefined)];
+	}, []);
 	useEffect(() => {
 		const userClient = new UserClient("/api");
 		userClient.getParam(new Empty()).then((response) => {
@@ -54,8 +59,8 @@ const App = () => {
 								open={drawerOpen}
 								onClose={() => setDrawerOpen(false)}
 							/>
-							<Box>
-								<Toolbar />
+							<Annoucment reload$={reloadAnnouncement$} />
+							<Box margin={2}>
 								<Routes>
 									<Route index element={<Intro />} />
 									<Route
@@ -86,7 +91,9 @@ const App = () => {
 										path="/instance-settings/*"
 										element={
 											<RequireLogin>
-												<InstanceSetting />
+												<InstanceSetting
+													reloadAnnouncement={reloadAnnouncement}
+												/>
 											</RequireLogin>
 										}
 									></Route>
