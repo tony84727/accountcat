@@ -1,8 +1,9 @@
 use std::{collections::HashSet, sync::Arc};
 
 use secrecy::{ExposeSecret, SecretString};
-use tonic::{Request, Response};
+use tonic::{Request, Response, Status};
 use tower_sessions::Session;
+use tracing::error;
 
 use crate::{
     idl::user::{LoginRequest, Param, Profile, user_server::User},
@@ -93,8 +94,18 @@ impl User for UserApi {
         }))
     }
     async fn get_param(&self, _request: Request<()>) -> tonic::Result<tonic::Response<Param>> {
+        let announcement = match sqlx::query!("select content from announcements where hidden_at is null order by created_at desc limit 1")
+            .fetch_one(&self.state.database).await  {
+                Ok(row) => Some(row.content),
+                Err(sqlx::Error::RowNotFound) => None,
+                Err(err) => {
+                    error!(action = "query announcement", error = ?err);
+                    return Err(Status::internal(String::new()));
+                }
+            };
         Ok(tonic::Response::new(Param {
             google_client_id: self.google_client_id.expose_secret().into(),
+            announcement,
         }))
     }
 }

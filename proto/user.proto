@@ -12,6 +12,7 @@ message Profile {
 
 message Param {
   string google_client_id = 1;
+  optional string announcement = 2;
 }
 
 service User {
