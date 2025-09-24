@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use accountcat::{
-    accounting_service::AccountingApi,
     config::{Config, General, HashIds, Login},
     idl::accounting::{
         Amount, AmountType, Item, ItemList, NewItem, UpdateItemRequest,
@@ -9,6 +8,7 @@ use accountcat::{
     },
     protobufutils::to_proto_timestamp,
     server::{ServerState, init_state},
+    service::accounting::AccountingApi,
     testing::{self, DummyIdClaimExtractor, insert_fake_user, test_database::TestDatabase},
 };
 use secrecy::SecretString;

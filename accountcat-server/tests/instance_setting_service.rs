@@ -3,8 +3,8 @@ use std::{collections::HashSet, sync::Arc};
 use accountcat::{
     config::{Config, General, HashIds, Login},
     idl::instance_setting::{Announcement, instance_setting_server::InstanceSetting},
-    instance_setting_service::InstanceSettingApi,
     server::{ServerState, init_state},
+    service::instance_setting::InstanceSettingApi,
     testing::{self, DummyIdClaimExtractor, test_database::TestDatabase},
 };
 use secrecy::SecretString;
