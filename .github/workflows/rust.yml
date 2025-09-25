@@ -14,10 +14,10 @@ jobs:
 
     runs-on: ubuntu-latest
     container:
-      image: docker.io/rust:1-bookworm
+      image: public.ecr.aws/docker/library/rust:1-bookworm
     services:
       database:
-        image: docker.io/postgres:17.5
+        image: public.ecr.aws/docker/library/postgres:17.5
         env:
           POSTGRES_HOST_AUTH_METHOD: trust
           POSTGRES_DB: accountcat
