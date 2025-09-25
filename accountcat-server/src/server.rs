@@ -12,7 +12,6 @@ use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
-    accounting_service,
     auth::FromSession,
     config::{self, Config},
     csp::{CspLayer, NonceLayer, build_csp},
@@ -21,10 +20,12 @@ use crate::{
         instance_setting::instance_setting_server::InstanceSettingServer,
         todolist::todolist_server::TodolistServer, user::user_server::UserServer,
     },
-    instance_setting_service::InstanceSettingApi,
     jwtutils::{self, JwtVerifier},
     serve_dist::ServeDist,
-    todolist_service, user_service,
+    service::{
+        accounting::AccountingApi, instance_setting::InstanceSettingApi, todolist::TodolistApi,
+        user::UserApi,
+    },
 };
 
 pub const SESSION_KEY_CLAIMS: &str = "claims";
@@ -83,17 +84,17 @@ pub async fn main(arg: &ServerArg) {
             .clone()
             .unwrap_or_default(),
     ));
-    let user_api = UserServer::new(user_service::UserApi::new(
+    let user_api = UserServer::new(UserApi::new(
         server_state.clone(),
         loaded_config.login.client_id,
         administrators.clone(),
     ));
     let id_claim_extractor = Arc::new(FromSession);
-    let todolist_api = TodolistServer::new(todolist_service::TodolistApi::new(
+    let todolist_api = TodolistServer::new(TodolistApi::new(
         server_state.clone(),
         id_claim_extractor.clone(),
     ));
-    let accounting_api = AccountingServer::new(accounting_service::AccountingApi::new(
+    let accounting_api = AccountingServer::new(AccountingApi::new(
         server_state.clone(),
         id_claim_extractor.clone(),
         loaded_config.hashids.salt,
