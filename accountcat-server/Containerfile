@@ -1,4 +1,4 @@
-FROM rust:1.89-alpine3.21 AS compile_tool
+FROM public.ecr.aws/docker/library/rust:1.89-alpine3.21 AS compile_tool
 RUN apk --no-cache add build-base openssl-dev openssl-libs-static
 WORKDIR /project
 ADD . .
@@ -17,7 +17,7 @@ RUN npm install
 COPY --from=compile_tool /project/bin/build_manifest ../target/release/build_manifest
 RUN make
 
-FROM rust:1.89-alpine3.21 AS compile_server
+FROM public.ecr.aws/docker/library/rust:1.89-alpine3.21 AS compile_server
 RUN apk --no-cache add build-base openssl-dev openssl-libs-static protoc protobuf-dev
 WORKDIR /project
 ENV SQLX_OFFLINE=true
@@ -26,7 +26,7 @@ RUN --mount=type=cache,target=/root/.cargo \
     --mount=type=cache,target=/project/target \
     cargo build --release && mkdir -p /project/bin && cp /project/target/release/accountcat /project/bin/accountcat
 
-FROM alpine:3.21
+FROM public.ecr.aws/docker/library/alpine:3.21
 WORKDIR /opt/accountcat
 COPY --from=compile_server /project/bin/accountcat .
 COPY --from=build_frontend /project/ui/dist ./ui/dist
