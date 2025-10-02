@@ -12,3 +12,8 @@ pub mod accounting {
 pub mod instance_setting {
     tonic::include_proto!("accountcat.instance_setting");
 }
+
+#[cfg(feature = "e2e")]
+pub mod testing {
+    tonic::include_proto!("accountcat.testing");
+}

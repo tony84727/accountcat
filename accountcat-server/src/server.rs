@@ -109,6 +109,13 @@ pub async fn main(arg: &ServerArg) {
     grpc_server_builder.add_service(todolist_api);
     grpc_server_builder.add_service(accounting_api);
     grpc_server_builder.add_service(instance_setting_api);
+    #[cfg(feature = "e2e")]
+    {
+        use crate::{idl::testing::testing_server::TestingServer, service::testing::TestingApi};
+
+        let testing_service = TestingServer::new(TestingApi::new(server_state.clone()));
+        grpc_server_builder.add_service(testing_service);
+    }
     let grpc_server = grpc_server_builder.routes();
 
     let app = Router::new()

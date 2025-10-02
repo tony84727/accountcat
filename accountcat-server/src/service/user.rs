@@ -1,6 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use secrecy::{ExposeSecret, SecretString};
+use sqlx::PgPool;
 use tonic::{Request, Response, Status};
 use tower_sessions::Session;
 use tracing::error;
@@ -31,6 +32,16 @@ impl UserApi {
     }
 }
 
+pub(crate) async fn create_new_user(db: &PgPool, google_sub: &str) -> sqlx::Result<()> {
+    sqlx::query!(
+        "insert into users (google_sub) values ($1) on conflict (google_sub) do nothing;",
+        google_sub
+    )
+    .execute(db)
+    .await
+    .map(|_| ())
+}
+
 #[tonic::async_trait]
 impl User for UserApi {
     async fn login(
@@ -56,13 +67,9 @@ impl User for UserApi {
             .jwt_verify
             .verify(&request.get_ref().token)
             .map_err(|_| tonic::Status::unauthenticated("invalid token"))?;
-        sqlx::query!(
-            "insert into users (google_sub) values ($1) on conflict (google_sub) do nothing;",
-            claims.sub
-        )
-        .execute(&self.state.database)
-        .await
-        .map_err(|_| tonic::Status::internal(String::new()))?;
+        create_new_user(&self.state.database, &claims.sub)
+            .await
+            .map_err(|_| tonic::Status::internal(String::new()))?;
         session
             .insert(SESSION_KEY_CLAIMS, &claims)
             .await
