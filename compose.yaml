@@ -18,9 +18,7 @@ services:
       POSTGRES_HOST_AUTH_METHOD: trust
       POSTGRES_DB: accountcat
   database-init:
-    build:
-      context: .
-      dockerfile: ./accountcat-server/Containerfile
+    image: ghcr.io/tony84727/accountcat/server:edge
     environment:
       DATABASE_HOST: database
       GOOGLE_LOGIN_CLIENT_ID: dummy
@@ -34,9 +32,7 @@ services:
   server:
     ports:
       - 8080:3000
-    build:
-      context: .
-      dockerfile: ./accountcat-server/Containerfile
+    image: ghcr.io/tony84727/accountcat/server:edge
     environment:
       DATABASE_HOST: database
 volumes:
