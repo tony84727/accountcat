@@ -24,6 +24,7 @@ services:
     environment:
       DATABASE_HOST: database
       GOOGLE_LOGIN_CLIENT_ID: dummy
+      HASHIDS_SALT: dummy
     depends_on:
       database:
         condition: service_healthy
