@@ -1,15 +1,20 @@
 name: Playwright Tests
 on:
-  push:
-    branches: [ main, master ]
-  pull_request:
-    branches: [ main, master ]
+  workflow_call:
+    inputs:
+      image-tag:
+        required: true
+        type: string
 jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
+    - name: Setup e2e server
+      env:
+        IMAGE: ghcr.io/${{ github.repository }}/server:${{ inputs.image-tag }}
+      run: docker compose -f compose.e2e.yaml up -d
     - uses: actions/setup-node@v4
       with:
         node-version: lts/*
