@@ -31,6 +31,7 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: |
+            type=sha,format=long
             type=ref,event=pr
             type=semver,pattern={{version}}
             type=edge
@@ -64,6 +65,11 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+  e2e-on-image:
+    needs: ['build-and-push-image']
+    uses: ./.github/workflows/playwright.yml
+    with:
+      image-tag: sha-${{ github.sha }}
   trigger-demo-deploy:
     runs-on: ubuntu-latest
     needs: ['build-and-push-image']

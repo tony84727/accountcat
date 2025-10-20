@@ -16,3 +16,9 @@ dist/
 src/proto
 tools
 /manifest_build.json
+
+# Playwright
+/test-results/
+/playwright-report/
+/blob-report/
+/playwright/.cache/
