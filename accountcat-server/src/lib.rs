@@ -4,6 +4,7 @@ pub mod csp;
 pub mod idl;
 pub mod jwtutils;
 pub mod migration;
+pub mod pki;
 pub mod protobufutils;
 mod secret_se;
 pub mod serve_dist;

@@ -33,6 +33,8 @@ uuid = { version = "1.18.0", features = ["v4"] }
 hash-ids = "0.3"
 time = "0.3.41"
 num-traits = "0.2.19"
+rcgen = "0.14.5"
+thiserror = "2.0.17"
 
 [build-dependencies]
 tonic-build = "0.13.1"
