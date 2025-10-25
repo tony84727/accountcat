@@ -16,6 +16,10 @@ pin-project-lite = "0.2.16"
 prost = "0.13.5"
 prost-types = "0.13.5"
 reqwest = { version = "0.12.22", default-features = false, features = ["charset", "http2", "json", "rustls-tls-webpki-roots"] }
+anyhow = "1.0.95"
+openssl = "0.10.68"
+rand = "0.8.5"
+rcgen = "0.13.1"
 secrecy = { version = "0.10.3", features = ["serde"] }
 serde = { version = "1.0.219", features = ["derive"] }
 sqlx = { version = "0.8.6", features = ["runtime-tokio", "postgres", "time", "bigdecimal"] }
