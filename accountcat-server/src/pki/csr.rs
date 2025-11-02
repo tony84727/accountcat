@@ -28,8 +28,15 @@ impl ToBeSignedCertificate {
         Ok(Self { key, params })
     }
 
-    pub fn signed_by<S: SigningKey>(&self, issuer: &Issuer<S>) -> Certificate {
-        self.params.signed_by(&self.key, issuer).unwrap()
+    pub fn self_signed<S: SigningKey>(&self, key: S) -> Result<Certificate, rcgen::Error> {
+        self.params.self_signed(&key)
+    }
+
+    pub fn signed_by<S: SigningKey>(
+        &self,
+        issuer: &Issuer<S>,
+    ) -> Result<Certificate, rcgen::Error> {
+        self.params.signed_by(&self.key, issuer)
     }
 }
 
@@ -54,7 +61,7 @@ mod tests {
         let ca_keypair = KeyPair::generate().expect("generate ca keypair");
         let ca_params = CertificateParams::new(vec![String::from("testing-ca")]).unwrap();
         let ca_issuer = Issuer::from_params(&ca_params, &ca_keypair);
-        let cert = tbs.signed_by(&ca_issuer);
+        let cert = tbs.signed_by(&ca_issuer).unwrap();
         let (_, parsed) = x509_parser::parse_x509_certificate(cert.der().as_bytes()).unwrap();
         let rdn: Vec<String> = parsed
             .subject()
