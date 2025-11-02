@@ -5,11 +5,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rcgen::{KeyPair, PKCS_ED25519};
+use rcgen::{Certificate, Issuer, KeyPair, PKCS_ED25519};
+use rustls_pki_types::CertificateDer;
 use thiserror::Error;
 use x509_parser::nom::AsBytes;
 
 use crate::pki::csr::{CreateError, ToBeSignedCertificate};
+
 const KEYPAIR_SUBPATH: &str = "key.p8";
 const CERTIFICATE_SUBPATH: &str = "ca.crt";
 
@@ -80,6 +82,19 @@ impl CertificateAuthority {
             certificate_der: cert_content.as_bytes().to_vec(),
         })
     }
+
+    pub fn issue(&self, subject: &str) -> Result<Certificate, IssueError> {
+        let tbs = ToBeSignedCertificate::create(subject)?;
+        let issuer = self.get_issuer();
+        let certificate = tbs.signed_by(&issuer)?;
+        Ok(certificate)
+    }
+
+    fn get_issuer(&self) -> Issuer<'static, &KeyPair> {
+        let cert_der = CertificateDer::from_slice(self.certificate_der.as_slice());
+        Issuer::from_ca_cert_der(&cert_der, &self.keypair)
+            .expect("stored CA certificate should remain valid")
+    }
 }
 
 #[derive(Error, Debug)]
@@ -114,6 +129,14 @@ pub enum GenerateError {
     GenerateKeyPair(#[from] rcgen::Error),
 }
 
+#[derive(Error, Debug)]
+pub enum IssueError {
+    #[error("failed to generate certificate {0}")]
+    Create(#[from] CreateError),
+    #[error("failed to sign a certificate {0}")]
+    Sign(#[from] rcgen::Error),
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::PermissionsExt;
@@ -141,5 +164,15 @@ mod tests {
                 & 0o777
         );
         assert_eq!(ca, loaded);
+    }
+
+    #[test]
+    fn test_issue() {
+        let ca = CertificateAuthority::generate().unwrap();
+        let certificate = ca.issue("testing subject").unwrap();
+        let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
+        let (_, x509) = x509_parser::parse_x509_certificate(certificate.der()).unwrap();
+        assert!(!x509.is_ca());
+        assert_eq!(&x509.issuer, ca_certificate.subject());
     }
 }

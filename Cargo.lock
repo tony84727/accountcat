@@ -22,6 +22,7 @@ dependencies = [
  "prost-types",
  "rcgen",
  "reqwest",
+ "rustls-pki-types",
  "secrecy",
  "serde",
  "sqlx",
@@ -2322,6 +2323,7 @@ dependencies = [
  "ring",
  "rustls-pki-types",
  "time",
+ "x509-parser",
  "yasna",
 ]
 
@@ -4155,6 +4157,7 @@ dependencies = [
  "lazy_static",
  "nom",
  "oid-registry",
+ "ring",
  "rusticata-macros",
  "thiserror 2.0.17",
  "time",
