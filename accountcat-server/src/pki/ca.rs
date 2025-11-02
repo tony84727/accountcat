@@ -141,7 +141,9 @@ pub enum IssueError {
 mod tests {
     use std::os::unix::fs::PermissionsExt;
 
+    use rustls_pki_types::{CertificateDer, UnixTime};
     use temp_dir::TempDir;
+    use webpki::{ALL_VERIFICATION_ALGS, EndEntityCert, KeyUsage, anchor_from_trusted_cert};
 
     use crate::pki::ca::{CertificateAuthority, KEYPAIR_SUBPATH};
 
@@ -170,6 +172,25 @@ mod tests {
     fn test_issue() {
         let ca = CertificateAuthority::generate().unwrap();
         let certificate = ca.issue("testing subject").unwrap();
+        let ca_der = CertificateDer::from_slice(&ca.certificate_der);
+        let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
+        let trust_anchors = [trust_anchor];
+
+        let end_entity_der = CertificateDer::from_slice(certificate.der());
+        let end_entity = EndEntityCert::try_from(&end_entity_der).unwrap();
+        let verified_path = end_entity
+            .verify_for_usage(
+                ALL_VERIFICATION_ALGS,
+                &trust_anchors,
+                &[],
+                UnixTime::now(),
+                KeyUsage::server_auth(),
+                None,
+                None,
+            )
+            .unwrap();
+        assert!(verified_path.intermediate_certificates().next().is_none());
+
         let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
         let (_, x509) = x509_parser::parse_x509_certificate(certificate.der()).unwrap();
         assert!(!x509.is_ca());
