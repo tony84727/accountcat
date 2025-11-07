@@ -8,6 +8,7 @@ use std::{
 use rcgen::{Certificate, Issuer, KeyPair, PKCS_ED25519};
 use rustls_pki_types::CertificateDer;
 use thiserror::Error;
+use time::{Duration, OffsetDateTime};
 use x509_parser::nom::AsBytes;
 
 use crate::pki::csr::{CreateError, ToBeSignedCertificate};
@@ -33,7 +34,11 @@ impl Eq for CertificateAuthority {}
 impl CertificateAuthority {
     pub fn generate() -> Result<Self, GenerateError> {
         let keypair = KeyPair::generate_for(&PKCS_ED25519)?;
-        let tbs = ToBeSignedCertificate::create("Root CA")?;
+        let tbs = ToBeSignedCertificate::create(
+            "Root CA",
+            OffsetDateTime::now_utc(),
+            OffsetDateTime::now_utc().saturating_add(Duration::days(3650)),
+        )?;
         let certificate = tbs.self_signed(&keypair)?;
         Ok(Self {
             keypair,
@@ -83,8 +88,24 @@ impl CertificateAuthority {
         })
     }
 
-    pub fn issue(&self, subject: &str) -> Result<Certificate, IssueError> {
-        let tbs = ToBeSignedCertificate::create(subject)?;
+    pub fn issue(&self, subject: &str, duration: Duration) -> Result<Certificate, IssueError> {
+        Self::issue_with_date(
+            &self,
+            subject,
+            OffsetDateTime::now_utc(),
+            OffsetDateTime::now_utc()
+                .checked_add(duration)
+                .ok_or(IssueError::InvalidNotBefore)?,
+        )
+    }
+
+    pub fn issue_with_date(
+        &self,
+        subject: &str,
+        not_before: OffsetDateTime,
+        not_after: OffsetDateTime,
+    ) -> Result<Certificate, IssueError> {
+        let tbs = ToBeSignedCertificate::create(subject, not_before, not_after)?;
         let issuer = self.get_issuer();
         let certificate = tbs.signed_by(&issuer)?;
         Ok(certificate)
@@ -135,6 +156,8 @@ pub enum IssueError {
     Create(#[from] CreateError),
     #[error("failed to sign a certificate {0}")]
     Sign(#[from] rcgen::Error),
+    #[error("specified date isn't valid or overflowed")]
+    InvalidNotBefore,
 }
 
 #[cfg(test)]
@@ -143,7 +166,10 @@ mod tests {
 
     use rustls_pki_types::{CertificateDer, UnixTime};
     use temp_dir::TempDir;
-    use webpki::{ALL_VERIFICATION_ALGS, EndEntityCert, KeyUsage, anchor_from_trusted_cert};
+    use time::{Duration, OffsetDateTime};
+    use webpki::{
+        ALL_VERIFICATION_ALGS, Cert, EndEntityCert, Error, KeyUsage, anchor_from_trusted_cert,
+    };
 
     use crate::pki::ca::{CertificateAuthority, KEYPAIR_SUBPATH};
 
@@ -171,7 +197,7 @@ mod tests {
     #[test]
     fn test_issue() {
         let ca = CertificateAuthority::generate().unwrap();
-        let certificate = ca.issue("testing subject").unwrap();
+        let certificate = ca.issue("testing subject", Duration::seconds(10)).unwrap();
         let ca_der = CertificateDer::from_slice(&ca.certificate_der);
         let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
         let trust_anchors = [trust_anchor];
@@ -191,6 +217,48 @@ mod tests {
             .unwrap();
         assert!(verified_path.intermediate_certificates().next().is_none());
 
+        let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
+        let (_, x509) = x509_parser::parse_x509_certificate(certificate.der()).unwrap();
+        assert!(!x509.is_ca());
+        assert_eq!(&x509.issuer, ca_certificate.subject());
+    }
+
+    #[test]
+    fn test_issue_expired() {
+        let ca = CertificateAuthority::generate().unwrap();
+        let certificate = ca
+            .issue_with_date(
+                "testing subject",
+                OffsetDateTime::now_utc().saturating_sub(Duration::hours(2)),
+                OffsetDateTime::now_utc().saturating_sub(Duration::hours(1)),
+            )
+            .unwrap();
+        let ca_der = CertificateDer::from_slice(&ca.certificate_der);
+        let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
+        let trust_anchors = [trust_anchor];
+
+        let end_entity_der = CertificateDer::from_slice(certificate.der());
+        let end_entity = EndEntityCert::try_from(&end_entity_der).unwrap();
+        let verify_error = end_entity
+            .verify_for_usage(
+                ALL_VERIFICATION_ALGS,
+                &trust_anchors,
+                &[],
+                UnixTime::now(),
+                KeyUsage::server_auth(),
+                None,
+                None,
+            )
+            .map(|path| {
+                path.intermediate_certificates()
+                    .collect::<Vec<&Cert>>()
+                    .len()
+            })
+            .expect_err("should be a invalid certificate");
+        assert!(
+            matches!(verify_error, Error::CertExpired { .. }),
+            "{verify_error:?}"
+        );
         let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
         let (_, x509) = x509_parser::parse_x509_certificate(certificate.der()).unwrap();
         assert!(!x509.is_ca());

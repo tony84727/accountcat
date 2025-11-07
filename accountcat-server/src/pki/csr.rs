@@ -3,6 +3,7 @@ use rcgen::{
     KeyUsagePurpose, PKCS_ED25519, SigningKey,
 };
 use thiserror::Error;
+use time::OffsetDateTime;
 
 pub struct ToBeSignedCertificate {
     pub key: KeyPair,
@@ -10,7 +11,11 @@ pub struct ToBeSignedCertificate {
 }
 
 impl ToBeSignedCertificate {
-    pub fn create(subject: &str) -> Result<Self, CreateError> {
+    pub fn create(
+        subject: &str,
+        not_before: OffsetDateTime,
+        not_after: OffsetDateTime,
+    ) -> Result<Self, CreateError> {
         let mut params = CertificateParams::default();
         params.distinguished_name.push(DnType::CountryName, "TW");
         params
@@ -24,6 +29,8 @@ impl ToBeSignedCertificate {
         params
             .extended_key_usages
             .push(ExtendedKeyUsagePurpose::ClientAuth);
+        params.not_before = not_before;
+        params.not_after = not_after;
         let key = KeyPair::generate_for(&PKCS_ED25519).map_err(CreateError::Keypair)?;
         Ok(Self { key, params })
     }
@@ -51,13 +58,19 @@ pub enum CreateError {
 #[cfg(test)]
 mod tests {
     use rcgen::{CertificateParams, Issuer, KeyPair};
+    use time::{Duration, OffsetDateTime};
     use x509_parser::nom::AsBytes;
 
     use crate::pki::csr::ToBeSignedCertificate;
 
     #[test]
     fn test_csr() {
-        let tbs = ToBeSignedCertificate::create("testing").unwrap();
+        let tbs = ToBeSignedCertificate::create(
+            "testing",
+            OffsetDateTime::now_utc(),
+            OffsetDateTime::now_utc().saturating_add(Duration::seconds(10)),
+        )
+        .unwrap();
         let ca_keypair = KeyPair::generate().expect("generate ca keypair");
         let ca_params = CertificateParams::new(vec![String::from("testing-ca")]).unwrap();
         let ca_issuer = Issuer::from_params(&ca_params, &ca_keypair);
