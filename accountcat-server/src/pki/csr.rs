@@ -5,6 +5,8 @@ use rcgen::{
 use thiserror::Error;
 use time::OffsetDateTime;
 
+use crate::pki::crt::IssuedCertificate;
+
 pub struct ToBeSignedCertificate {
     pub key: KeyPair,
     pub params: CertificateParams,
@@ -42,8 +44,12 @@ impl ToBeSignedCertificate {
     pub fn signed_by<S: SigningKey>(
         &self,
         issuer: &Issuer<S>,
-    ) -> Result<Certificate, rcgen::Error> {
-        self.params.signed_by(&self.key, issuer)
+    ) -> Result<IssuedCertificate, rcgen::Error> {
+        let certificate = self.params.signed_by(&self.key, issuer)?;
+        Ok(IssuedCertificate {
+            params: self.params.clone(),
+            certificate,
+        })
     }
 }
 
@@ -74,8 +80,9 @@ mod tests {
         let ca_keypair = KeyPair::generate().expect("generate ca keypair");
         let ca_params = CertificateParams::new(vec![String::from("testing-ca")]).unwrap();
         let ca_issuer = Issuer::from_params(&ca_params, &ca_keypair);
-        let cert = tbs.signed_by(&ca_issuer).unwrap();
-        let (_, parsed) = x509_parser::parse_x509_certificate(cert.der().as_bytes()).unwrap();
+        let issued = tbs.signed_by(&ca_issuer).unwrap();
+        let (_, parsed) =
+            x509_parser::parse_x509_certificate(issued.certificate.der().as_bytes()).unwrap();
         let rdn: Vec<String> = parsed
             .subject()
             .iter_rdn()

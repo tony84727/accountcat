@@ -5,13 +5,18 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use rcgen::{Certificate, Issuer, KeyPair, PKCS_ED25519};
+use rcgen::{Issuer, KeyPair, PKCS_ED25519};
 use rustls_pki_types::CertificateDer;
+use sqlx::{PgPool, types::BigDecimal};
 use thiserror::Error;
 use time::{Duration, OffsetDateTime};
-use x509_parser::nom::AsBytes;
+use tonic::async_trait;
+use x509_parser::{nom::AsBytes, x509::AttributeTypeAndValue};
 
-use crate::pki::csr::{CreateError, ToBeSignedCertificate};
+use crate::pki::{
+    crt::IssuedCertificate,
+    csr::{CreateError, ToBeSignedCertificate},
+};
 
 const KEYPAIR_SUBPATH: &str = "key.p8";
 const CERTIFICATE_SUBPATH: &str = "ca.crt";
@@ -79,7 +84,6 @@ impl CertificateAuthority {
         let mut cert_content = Vec::new();
         let mut cert = File::open(&cert_path)?;
         cert.read_to_end(&mut cert_content)?;
-        x509_parser::parse_x509_certificate(cert_content.as_bytes())?;
         let keypair = std::fs::read_to_string(keypair_path)?;
         let keypair = KeyPair::from_pem(&keypair)?;
         Ok(Self {
@@ -93,7 +97,7 @@ impl CertificateAuthority {
         subject: &str,
         not_before: OffsetDateTime,
         not_after: OffsetDateTime,
-    ) -> Result<Certificate, IssueError> {
+    ) -> Result<IssuedCertificate, IssueError> {
         let tbs = ToBeSignedCertificate::create(subject, not_before, not_after)?;
         let issuer = self.get_issuer();
         let certificate = tbs.signed_by(&issuer)?;
@@ -107,8 +111,13 @@ impl CertificateAuthority {
     }
 }
 
+#[async_trait]
 impl CertificateIssuer for CertificateAuthority {
-    async fn issue(&self, subject: &str, duration: Duration) -> Result<Certificate, IssueError> {
+    async fn issue(
+        &self,
+        subject: &str,
+        duration: Duration,
+    ) -> Result<IssuedCertificate, IssueError> {
         Self::issue_with_date(
             &self,
             subject,
@@ -120,12 +129,86 @@ impl CertificateIssuer for CertificateAuthority {
     }
 }
 
-pub trait CertificateIssuer {
-    fn issue(
+#[async_trait]
+pub trait CertificateIssuer<E = IssueError> {
+    async fn issue(&self, subject: &str, duration: Duration) -> Result<IssuedCertificate, E>;
+}
+
+pub struct TrackedCertificateIssuer<I: CertificateIssuer> {
+    db: PgPool,
+    issuer: I,
+}
+
+impl<I: CertificateIssuer> TrackedCertificateIssuer<I> {
+    pub fn new(db: PgPool, issuer: I) -> Self {
+        Self { db, issuer }
+    }
+}
+
+#[async_trait]
+impl<I: CertificateIssuer + Send + Sync> CertificateIssuer<TrackedIssueError>
+    for TrackedCertificateIssuer<I>
+{
+    async fn issue(
         &self,
         subject: &str,
         duration: Duration,
-    ) -> impl std::future::Future<Output = Result<Certificate, IssueError>> + Send;
+    ) -> Result<IssuedCertificate, TrackedIssueError> {
+        let issued = self.issuer.issue(subject, duration).await?;
+        let (_, parsed) = x509_parser::parse_x509_certificate(issued.certificate.der())?;
+        let serial = BigDecimal::from_biguint(parsed.serial.clone(), 0);
+        let dn = parsed.subject();
+        let raw_dn = parsed.subject().as_raw();
+        fn optional_rdn<'n, I: Iterator<Item = &'n AttributeTypeAndValue<'n>>>(
+            mut iter: I,
+        ) -> Option<String> {
+            iter.next().and_then(|x| x.as_str().ok()).map(String::from)
+        }
+        let country = optional_rdn(dn.iter_country());
+        let state = optional_rdn(dn.iter_state_or_province());
+        let locality = optional_rdn(dn.iter_locality());
+        let organization = optional_rdn(dn.iter_organization());
+        let organizational_unit = optional_rdn(dn.iter_organizational_unit());
+        let common_name = optional_rdn(dn.iter_common_name());
+        sqlx::query!(
+            "insert into certificates (
+                serial,
+                dn,
+                country,
+                state,
+                locality,
+                organization,
+                organizational_unit,
+                common_name,
+                not_before,
+                not_after
+            ) values (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                $6,
+                $7,
+                $8,
+                $9,
+                $10
+            )",
+            serial,
+            raw_dn,
+            country,
+            state,
+            locality,
+            organization,
+            organizational_unit,
+            common_name,
+            issued.params.not_before,
+            issued.params.not_after,
+        )
+        .execute(&self.db)
+        .await?;
+        Ok(issued)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -170,6 +253,20 @@ pub enum IssueError {
     InvalidNotBefore,
 }
 
+#[derive(Error, Debug)]
+pub enum TrackedIssueError {
+    #[error(transparent)]
+    Issue(#[from] IssueError),
+    #[error("failed to track issued certificate: {0}")]
+    Track(#[from] sqlx::Error),
+    #[error("invalid certificate issued by issuer")]
+    InvalidCertificate(#[from] x509_parser::asn1_rs::Err<x509_parser::error::X509Error>),
+    #[error("issued certificate doesn't have a subject identifier")]
+    MissingSubjectUid,
+    #[error("issued certificate doesn't have a issuer identifier")]
+    MissingIssuerUid,
+}
+
 #[cfg(test)]
 mod tests {
     use std::os::unix::fs::PermissionsExt;
@@ -207,7 +304,7 @@ mod tests {
     #[tokio::test]
     async fn test_issue() {
         let ca = CertificateAuthority::generate().unwrap();
-        let certificate = ca
+        let issued = ca
             .issue("testing subject", Duration::seconds(10))
             .await
             .unwrap();
@@ -215,7 +312,7 @@ mod tests {
         let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
         let trust_anchors = [trust_anchor];
 
-        let end_entity_der = CertificateDer::from_slice(certificate.der());
+        let end_entity_der = CertificateDer::from_slice(issued.certificate.der());
         let end_entity = EndEntityCert::try_from(&end_entity_der).unwrap();
         let verified_path = end_entity
             .verify_for_usage(
@@ -231,7 +328,7 @@ mod tests {
         assert!(verified_path.intermediate_certificates().next().is_none());
 
         let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
-        let (_, x509) = x509_parser::parse_x509_certificate(certificate.der()).unwrap();
+        let (_, x509) = x509_parser::parse_x509_certificate(issued.certificate.der()).unwrap();
         assert!(!x509.is_ca());
         assert_eq!(&x509.issuer, ca_certificate.subject());
     }
@@ -239,7 +336,7 @@ mod tests {
     #[test]
     fn test_issue_expired() {
         let ca = CertificateAuthority::generate().unwrap();
-        let certificate = ca
+        let issued = ca
             .issue_with_date(
                 "testing subject",
                 OffsetDateTime::now_utc().saturating_sub(Duration::hours(2)),
@@ -250,7 +347,7 @@ mod tests {
         let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
         let trust_anchors = [trust_anchor];
 
-        let end_entity_der = CertificateDer::from_slice(certificate.der());
+        let end_entity_der = CertificateDer::from_slice(issued.certificate.der());
         let end_entity = EndEntityCert::try_from(&end_entity_der).unwrap();
         let verify_error = end_entity
             .verify_for_usage(
@@ -273,7 +370,7 @@ mod tests {
             "{verify_error:?}"
         );
         let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
-        let (_, x509) = x509_parser::parse_x509_certificate(certificate.der()).unwrap();
+        let (_, x509) = x509_parser::parse_x509_certificate(issued.certificate.der()).unwrap();
         assert!(!x509.is_ca());
         assert_eq!(&x509.issuer, ca_certificate.subject());
     }
