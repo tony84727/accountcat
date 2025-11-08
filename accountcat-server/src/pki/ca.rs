@@ -88,17 +88,6 @@ impl CertificateAuthority {
         })
     }
 
-    pub fn issue(&self, subject: &str, duration: Duration) -> Result<Certificate, IssueError> {
-        Self::issue_with_date(
-            &self,
-            subject,
-            OffsetDateTime::now_utc(),
-            OffsetDateTime::now_utc()
-                .checked_add(duration)
-                .ok_or(IssueError::InvalidNotBefore)?,
-        )
-    }
-
     pub fn issue_with_date(
         &self,
         subject: &str,
@@ -116,6 +105,27 @@ impl CertificateAuthority {
         Issuer::from_ca_cert_der(&cert_der, &self.keypair)
             .expect("stored CA certificate should remain valid")
     }
+}
+
+impl CertificateIssuer for CertificateAuthority {
+    async fn issue(&self, subject: &str, duration: Duration) -> Result<Certificate, IssueError> {
+        Self::issue_with_date(
+            &self,
+            subject,
+            OffsetDateTime::now_utc(),
+            OffsetDateTime::now_utc()
+                .checked_add(duration)
+                .ok_or(IssueError::InvalidNotBefore)?,
+        )
+    }
+}
+
+pub trait CertificateIssuer {
+    fn issue(
+        &self,
+        subject: &str,
+        duration: Duration,
+    ) -> impl std::future::Future<Output = Result<Certificate, IssueError>> + Send;
 }
 
 #[derive(Error, Debug)]
@@ -171,7 +181,7 @@ mod tests {
         ALL_VERIFICATION_ALGS, Cert, EndEntityCert, Error, KeyUsage, anchor_from_trusted_cert,
     };
 
-    use crate::pki::ca::{CertificateAuthority, KEYPAIR_SUBPATH};
+    use crate::pki::ca::{CertificateAuthority, CertificateIssuer, KEYPAIR_SUBPATH};
 
     #[test]
     fn test_save_load() {
@@ -194,10 +204,13 @@ mod tests {
         assert_eq!(ca, loaded);
     }
 
-    #[test]
-    fn test_issue() {
+    #[tokio::test]
+    async fn test_issue() {
         let ca = CertificateAuthority::generate().unwrap();
-        let certificate = ca.issue("testing subject", Duration::seconds(10)).unwrap();
+        let certificate = ca
+            .issue("testing subject", Duration::seconds(10))
+            .await
+            .unwrap();
         let ca_der = CertificateDer::from_slice(&ca.certificate_der);
         let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
         let trust_anchors = [trust_anchor];
