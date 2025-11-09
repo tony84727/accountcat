@@ -31,12 +31,15 @@ enum Action {
 
 async fn init() {
     let config = config::load().unwrap();
-    if CertificateAuthority::is_good("./pki") {
-        println!("A CA already initialized under ./pki");
+    let ca_dir = config.pki.ca;
+    if CertificateAuthority::is_good(&ca_dir) {
+        println!(
+            "A CA already initialized under {}",
+            ca_dir.to_string_lossy()
+        );
         return;
     }
     let ca = CertificateAuthority::generate().unwrap();
-    let ca_dir = config.pki.ca;
     std::fs::create_dir_all(&ca_dir).unwrap();
     ca.save(ca_dir).unwrap();
     println!("CA initialized successfully");
