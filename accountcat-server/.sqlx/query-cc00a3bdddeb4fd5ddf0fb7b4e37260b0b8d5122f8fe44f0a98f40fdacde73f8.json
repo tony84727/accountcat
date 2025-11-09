@@ -1,0 +1,68 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select\n            serial,\n            country,\n            state,\n            locality,\n            organization,\n            organizational_unit,\n            common_name,\n            not_before,\n            not_after\n        from certificates\n        order by not_after desc",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "serial",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "country",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "state",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "locality",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "organization",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "organizational_unit",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "common_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "not_before",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "not_after",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "cc00a3bdddeb4fd5ddf0fb7b4e37260b0b8d5122f8fe44f0a98f40fdacde73f8"
+}

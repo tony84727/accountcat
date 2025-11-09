@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select count(*) from certificates",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "cf819fa45aeb2729b07495152bd1d66c4bde6344ce5cbc10aff5610b21ae4d58"
+}

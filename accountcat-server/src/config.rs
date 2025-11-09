@@ -1,3 +1,5 @@
+use std::{path::PathBuf, str::FromStr};
+
 use crate::secret_se::{serialize_optional_secret, serialize_secret};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
@@ -12,6 +14,7 @@ pub struct Config {
     pub login: Login,
     pub database: Database,
     pub hashids: HashIds,
+    pub pki: Pki,
 }
 
 impl Config {
@@ -26,6 +29,7 @@ pub struct ConfigFile {
     pub login: Option<Login>,
     pub database: Option<Database>,
     pub hashids: Option<HashIds>,
+    pub pki: Option<Pki>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -75,14 +79,15 @@ fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
             Err(err) => return Err(LoadError::Parse(err)),
         }
     }
-    let (login, database, hashids, general) = match config_file {
+    let (login, database, hashids, general, pki) = match config_file {
         Some(config_file) => (
             config_file.login,
             config_file.database,
             config_file.hashids,
             config_file.general,
+            config_file.pki,
         ),
-        None => (None, None, None, None),
+        None => (None, None, None, None, None),
     };
     let login: Login = std::env::var("GOOGLE_LOGIN_CLIENT_ID")
         .ok()
@@ -101,13 +106,34 @@ fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
         })
         .or(hashids)
         .ok_or(LoadError::MissingEssentialValue("hashids.salt"))?;
+    let pki = std::env::var("PKI_CA")
+        .ok()
+        .map(|directory| Pki {
+            ca: PathBuf::from(directory),
+        })
+        .or(pki)
+        .unwrap_or_default();
     let general = General::from_env().or(general);
     Ok(Config {
         general,
         login,
         database,
         hashids,
+        pki,
     })
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct Pki {
+    pub ca: PathBuf,
+}
+
+impl Default for Pki {
+    fn default() -> Self {
+        Self {
+            ca: PathBuf::from_str("./pki").unwrap(),
+        }
+    }
 }
 
 #[derive(Debug)]
