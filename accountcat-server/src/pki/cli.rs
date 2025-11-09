@@ -1,7 +1,11 @@
 use clap::{Parser, Subcommand};
 use sqlx::PgPool;
+use time::Duration;
 
-use crate::{config, pki::ca::CertificateAuthority};
+use crate::{
+    config,
+    pki::ca::{CertificateAuthority, CertificateIssuer, TrackedCertificateIssuer},
+};
 
 #[derive(Parser)]
 pub struct Command {
@@ -15,6 +19,8 @@ enum Action {
     List,
     /// Initialize Certificate Authority
     Init,
+    /// Issue a certificate for entity
+    Issue(IssueArgs),
 }
 
 async fn init() {
@@ -71,11 +77,34 @@ async fn list() {
     }
 }
 
+#[derive(Parser)]
+struct IssueArgs {
+    /// Entity name
+    subject: String,
+    /// Certificate validity duration in days
+    #[arg(default_value_t = 90)]
+    days: i64,
+}
+
+impl IssueArgs {
+    async fn run(&self) {
+        let config = config::load().unwrap();
+        let ca = CertificateAuthority::load(config.pki.ca.clone()).unwrap();
+        let ca = TrackedCertificateIssuer::new(config.database.clone().into(), ca);
+        let issued = ca
+            .issue(&self.subject, Duration::days(self.days))
+            .await
+            .unwrap();
+        println!("{}", issued.certificate.pem())
+    }
+}
+
 impl Command {
     pub async fn run(&self) {
-        match self.action {
+        match &self.action {
             Action::Init => init().await,
             Action::List => list().await,
+            Action::Issue(args) => args.run().await,
         }
     }
 }
