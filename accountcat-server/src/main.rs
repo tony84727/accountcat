@@ -1,5 +1,5 @@
 use accountcat::{
-    config,
+    config, pki,
     server::{self, ServerArg},
 };
 use clap::{Parser, Subcommand};
@@ -18,6 +18,8 @@ enum Command {
     Migrate,
     /// Dump current server settings
     Settings,
+    /// Public key infrastructure management
+    PKI(pki::cli::Command),
 }
 
 impl Default for Command {
@@ -33,5 +35,6 @@ async fn main() {
         Command::Server(arg) => server::main(&arg).await,
         Command::Migrate => accountcat::migration::run().await,
         Command::Settings => config::print_settings(),
+        Command::PKI(pki_cli) => pki_cli.run().await,
     }
 }
