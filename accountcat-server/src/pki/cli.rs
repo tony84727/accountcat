@@ -78,8 +78,8 @@ async fn list() {
             c.organizational_unit.unwrap_or_default(),
             c.common_name.unwrap_or_default(),
         );
-        println!("\tNotBefore: {}", c.not_before.to_string());
-        println!("\tNotAfter: {}", c.not_after.to_string());
+        println!("\tNotBefore: {}", c.not_before);
+        println!("\tNotAfter: {}", c.not_after);
     }
 }
 

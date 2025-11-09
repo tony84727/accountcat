@@ -112,7 +112,7 @@ fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
             ca: PathBuf::from(directory),
         })
         .or(pki)
-        .unwrap_or_else(|| Pki::default());
+        .unwrap_or_default();
     let general = General::from_env().or(general);
     Ok(Config {
         general,

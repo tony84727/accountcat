@@ -19,7 +19,7 @@ enum Command {
     /// Dump current server settings
     Settings,
     /// Public key infrastructure management
-    PKI(pki::cli::Command),
+    Pki(pki::cli::Command),
 }
 
 impl Default for Command {
@@ -35,6 +35,6 @@ async fn main() {
         Command::Server(arg) => server::main(&arg).await,
         Command::Migrate => accountcat::migration::run().await,
         Command::Settings => config::print_settings(),
-        Command::PKI(pki_cli) => pki_cli.run().await,
+        Command::Pki(pki_cli) => pki_cli.run().await,
     }
 }

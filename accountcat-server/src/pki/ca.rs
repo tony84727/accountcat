@@ -123,8 +123,7 @@ impl CertificateIssuer for CertificateAuthority {
         subject: &str,
         duration: Duration,
     ) -> Result<IssuedCertificate, IssueError> {
-        Self::issue_with_date(
-            &self,
+        self.issue_with_date(
             subject,
             OffsetDateTime::now_utc(),
             OffsetDateTime::now_utc()
