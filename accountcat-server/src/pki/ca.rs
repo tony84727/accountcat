@@ -92,6 +92,10 @@ impl CertificateAuthority {
         })
     }
 
+    pub fn is_good<P: AsRef<Path>>(directory: P) -> bool {
+        Self::load(directory).is_ok()
+    }
+
     pub fn issue_with_date(
         &self,
         subject: &str,

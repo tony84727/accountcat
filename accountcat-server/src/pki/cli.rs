@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use sqlx::PgPool;
 
-use crate::config;
+use crate::{config, pki::ca::CertificateAuthority};
 
 #[derive(Parser)]
 pub struct Command {
@@ -13,6 +13,21 @@ pub struct Command {
 enum Action {
     /// List issued certificates order by NotAfter in decreasing order
     List,
+    /// Initialize Certificate Authority
+    Init,
+}
+
+async fn init() {
+    let config = config::load().unwrap();
+    if CertificateAuthority::is_good("./pki") {
+        println!("A CA already initialized under ./pki");
+        return;
+    }
+    let ca = CertificateAuthority::generate().unwrap();
+    let ca_dir = config.pki.ca;
+    std::fs::create_dir_all(&ca_dir).unwrap();
+    ca.save(ca_dir).unwrap();
+    println!("CA initialized successfully");
 }
 
 async fn list() {
@@ -59,6 +74,7 @@ async fn list() {
 impl Command {
     pub async fn run(&self) {
         match self.action {
+            Action::Init => init().await,
             Action::List => list().await,
         }
     }
