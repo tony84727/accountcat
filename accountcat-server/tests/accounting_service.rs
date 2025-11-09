@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use accountcat::{
-    config::{Config, General, HashIds, Login},
+    config::{Config, General, HashIds, Login, Pki},
     idl::accounting::{
         Amount, AmountType, Item, ItemList, NewItem, UpdateItemRequest,
         accounting_server::Accounting,
@@ -27,6 +27,7 @@ async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
         hashids: HashIds {
             salt: SecretString::from("dummy"),
         },
+        pki: Pki::default(),
     })
     .await;
     (test_database, server_state)

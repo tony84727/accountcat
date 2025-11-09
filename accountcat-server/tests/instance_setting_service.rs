@@ -1,7 +1,7 @@
 use std::{collections::HashSet, sync::Arc};
 
 use accountcat::{
-    config::{Config, General, HashIds, Login},
+    config::{Config, General, HashIds, Login, Pki},
     idl::instance_setting::{Announcement, instance_setting_server::InstanceSetting},
     server::{ServerState, init_state},
     service::instance_setting::InstanceSettingApi,
@@ -24,6 +24,7 @@ async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
         hashids: HashIds {
             salt: SecretString::from("dummy"),
         },
+        pki: Pki::default(),
     })
     .await;
     (test_database, server_state)
