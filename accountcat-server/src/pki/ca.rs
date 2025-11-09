@@ -21,6 +21,12 @@ use crate::pki::{
 const KEYPAIR_SUBPATH: &str = "key.p8";
 const CERTIFICATE_SUBPATH: &str = "ca.crt";
 
+pub(crate) fn create_option_for_sensitive_data() -> OpenOptions {
+    let mut options = OpenOptions::new();
+    options.write(true).create(true).truncate(true).mode(0o600);
+    options
+}
+
 #[derive(Debug)]
 pub struct CertificateAuthority {
     keypair: KeyPair,
@@ -56,12 +62,7 @@ impl CertificateAuthority {
             return Err(SaveError::NotDirectory);
         }
         let keypair_out = directory.as_ref().join(KEYPAIR_SUBPATH);
-        let mut keypair = OpenOptions::new()
-            .write(true)
-            .create(true)
-            .truncate(true)
-            .mode(0o600)
-            .open(keypair_out)?;
+        let mut keypair = create_option_for_sensitive_data().open(keypair_out)?;
         keypair.write_all(self.keypair.serialize_pem().as_bytes())?;
         let cert_out = directory.as_ref().join(CERTIFICATE_SUBPATH);
         let mut cert = File::create(cert_out)?;

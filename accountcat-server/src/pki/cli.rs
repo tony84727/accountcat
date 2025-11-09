@@ -1,10 +1,16 @@
+use std::{fs::File, io::Write, process::exit};
+
 use clap::{Parser, Subcommand};
 use sqlx::PgPool;
 use time::Duration;
+use x509_parser::nom::AsBytes;
 
 use crate::{
     config,
-    pki::ca::{CertificateAuthority, CertificateIssuer, TrackedCertificateIssuer},
+    pki::ca::{
+        CertificateAuthority, CertificateIssuer, TrackedCertificateIssuer,
+        create_option_for_sensitive_data,
+    },
 };
 
 #[derive(Parser)]
@@ -89,12 +95,43 @@ struct IssueArgs {
 impl IssueArgs {
     async fn run(&self) {
         let config = config::load().unwrap();
-        let ca = CertificateAuthority::load(config.pki.ca.clone()).unwrap();
+        let ca_dir = &config.pki.ca;
+        let ca = CertificateAuthority::load(ca_dir).unwrap();
         let ca = TrackedCertificateIssuer::new(config.database.clone().into(), ca);
+        let certificates_dir = ca_dir.join("certificates");
+        let _ = std::fs::create_dir_all(&certificates_dir);
+        if !certificates_dir.is_dir() {
+            println!(
+                "{} isn't a directory or inaccessible.",
+                certificates_dir.to_string_lossy()
+            );
+            exit(1);
+        }
         let issued = ca
             .issue(&self.subject, Duration::days(self.days))
             .await
             .unwrap();
+        let (_, parsed) = x509_parser::parse_x509_certificate(issued.certificate.der())
+            .expect("failed to parse issued certificate");
+        let dir = certificates_dir.join(format!("{:X}", parsed.serial));
+        if let Err(err) = std::fs::create_dir_all(&dir) {
+            println!("failed to create certificate directory: {err:?}");
+            exit(1);
+        }
+        let key_path = dir.join("key.crt");
+        if let Err(err) = create_option_for_sensitive_data()
+            .open(key_path)
+            .and_then(|mut f| f.write_all(&issued.key.serialize_der()))
+        {
+            println!("failed to store certificate key: {err:?}");
+            exit(1);
+        }
+        if let Err(err) = File::create(dir.join("crt.crt"))
+            .and_then(|mut f| f.write_all(issued.certificate.der().as_bytes()))
+        {
+            println!("failed to store certificate file: {err:?}");
+            exit(1);
+        }
         println!("{}", issued.certificate.pem())
     }
 }

@@ -42,11 +42,12 @@ impl ToBeSignedCertificate {
     }
 
     pub fn signed_by<S: SigningKey>(
-        &self,
+        self,
         issuer: &Issuer<S>,
     ) -> Result<IssuedCertificate, rcgen::Error> {
         let certificate = self.params.signed_by(&self.key, issuer)?;
         Ok(IssuedCertificate {
+            key: self.key,
             params: self.params.clone(),
             certificate,
         })
