@@ -17,6 +17,7 @@ dependencies = [
  "jsonwebtoken",
  "mime_guess",
  "num-traits",
+ "percent-encoding",
  "pin-project-lite",
  "prost",
  "prost-types",

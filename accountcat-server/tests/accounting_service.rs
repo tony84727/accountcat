@@ -9,11 +9,13 @@ use accountcat::{
     protobufutils::to_proto_timestamp,
     server::{ServerState, init_state},
     service::accounting::AccountingApi,
-    testing::{self, DummyIdClaimExtractor, insert_fake_user, test_database::TestDatabase},
+    testing::{self, insert_fake_user, test_database::TestDatabase, with_claims},
 };
 use secrecy::SecretString;
 use time::OffsetDateTime;
 use tonic::Request;
+
+const USER_SUB: &str = "testing";
 
 async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
     let test_database = testing::create_database().await;
@@ -37,23 +39,22 @@ async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
 async fn test_add_accounting_item() {
     let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
-    let accounting_api = AccountingApi::new(
-        Arc::new(server_state),
-        Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
-        SecretString::from("dummy"),
-    );
+    let accounting_api = AccountingApi::new(Arc::new(server_state), SecretString::from("dummy"));
 
     let test_add =
         async |amount: &'static str, amount_type: AmountType, expected_amount: &'static str| {
-            let req = Request::new(NewItem {
-                name: String::from("test item"),
-                amount: Some(Amount {
-                    amount: String::from(amount),
-                    currency: String::from("TWD"),
+            let req = with_claims(
+                Request::new(NewItem {
+                    name: String::from("test item"),
+                    amount: Some(Amount {
+                        amount: String::from(amount),
+                        currency: String::from("TWD"),
+                    }),
+                    r#type: amount_type as i32,
+                    tags: Default::default(),
                 }),
-                r#type: amount_type as i32,
-                tags: Default::default(),
-            });
+                USER_SUB,
+            );
             let response = accounting_api.add(req).await.unwrap();
             assert_eq!(
                 expected_amount,
@@ -71,7 +72,7 @@ async fn test_add_accounting_item() {
     // positive expense represents an expense
     test_add("999999.99", AmountType::Expense, "-999999.99").await;
     let list = accounting_api
-        .list(Request::new(()))
+        .list(with_claims(Request::new(()), USER_SUB))
         .await
         .unwrap()
         .into_inner();
@@ -94,24 +95,26 @@ async fn test_add_accounting_item() {
 async fn test_update_accounting_item_occurred_at() {
     let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
-    let accounting_api = AccountingApi::new(
-        Arc::new(server_state),
-        Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
-        SecretString::from("dummy"),
-    );
+    let accounting_api = AccountingApi::new(Arc::new(server_state), SecretString::from("dummy"));
 
-    let req = Request::new(NewItem {
-        name: String::from("test item"),
-        amount: Some(Amount {
-            amount: String::from("100"),
-            currency: String::from("TWD"),
+    let req = with_claims(
+        Request::new(NewItem {
+            name: String::from("test item"),
+            amount: Some(Amount {
+                amount: String::from("100"),
+                currency: String::from("TWD"),
+            }),
+            r#type: AmountType::Expense as i32,
+            tags: Default::default(),
         }),
-        r#type: AmountType::Expense as i32,
-        tags: Default::default(),
-    });
+        USER_SUB,
+    );
     let _response = accounting_api.add(req).await.unwrap();
     let list_items = || async {
-        let list = accounting_api.list(Request::new(())).await.unwrap();
+        let list = accounting_api
+            .list(with_claims(Request::new(()), USER_SUB))
+            .await
+            .unwrap();
         let ItemList { items } = list.into_inner();
         items
     };
@@ -120,14 +123,17 @@ async fn test_update_accounting_item_occurred_at() {
     let original_item = items.first().unwrap();
     let item_id = original_item.id.clone();
     let _response = accounting_api
-        .update_item(Request::new(UpdateItemRequest {
-            id: item_id,
-            name: None,
-            amount: None,
-            occurred_at: Some(to_proto_timestamp(
-                OffsetDateTime::from_unix_timestamp(1753599600).unwrap(),
-            )),
-        }))
+        .update_item(with_claims(
+            Request::new(UpdateItemRequest {
+                id: item_id,
+                name: None,
+                amount: None,
+                occurred_at: Some(to_proto_timestamp(
+                    OffsetDateTime::from_unix_timestamp(1753599600).unwrap(),
+                )),
+            }),
+            USER_SUB,
+        ))
         .await
         .unwrap();
     let items = list_items().await;
@@ -147,24 +153,26 @@ async fn test_update_accounting_item_amount_magnitude(
 ) {
     let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
-    let accounting_api = AccountingApi::new(
-        Arc::new(server_state),
-        Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
-        SecretString::from("dummy"),
-    );
+    let accounting_api = AccountingApi::new(Arc::new(server_state), SecretString::from("dummy"));
 
-    let req = Request::new(NewItem {
-        name: String::from("test item"),
-        amount: Some(Amount {
-            amount: String::from(origin),
-            currency: String::from("TWD"),
+    let req = with_claims(
+        Request::new(NewItem {
+            name: String::from("test item"),
+            amount: Some(Amount {
+                amount: String::from(origin),
+                currency: String::from("TWD"),
+            }),
+            r#type: amount_type as i32,
+            tags: Default::default(),
         }),
-        r#type: amount_type as i32,
-        tags: Default::default(),
-    });
+        USER_SUB,
+    );
     let _response = accounting_api.add(req).await.unwrap();
     let list_items = || async {
-        let list = accounting_api.list(Request::new(())).await.unwrap();
+        let list = accounting_api
+            .list(with_claims(Request::new(()), USER_SUB))
+            .await
+            .unwrap();
         let ItemList { items } = list.into_inner();
         items
     };
@@ -173,15 +181,18 @@ async fn test_update_accounting_item_amount_magnitude(
     let original_item = items.first().unwrap();
     let item_id = original_item.id.clone();
     let _response = accounting_api
-        .update_item(Request::new(UpdateItemRequest {
-            id: item_id,
-            name: None,
-            amount: Some(Amount {
-                currency: String::from("TWD"),
-                amount: String::from(modified),
+        .update_item(with_claims(
+            Request::new(UpdateItemRequest {
+                id: item_id,
+                name: None,
+                amount: Some(Amount {
+                    currency: String::from("TWD"),
+                    amount: String::from(modified),
+                }),
+                occurred_at: None,
             }),
-            occurred_at: None,
-        }))
+            USER_SUB,
+        ))
         .await
         .unwrap();
     let items = list_items().await;
@@ -218,24 +229,26 @@ async fn test_update_accounting_item_amount_magnitude_zero_income() {
 async fn test_update_accounting_item_name() {
     let (_test_database, server_state) = init_test_database_and_server_state().await;
     insert_fake_user(&server_state.database).await.unwrap();
-    let accounting_api = AccountingApi::new(
-        Arc::new(server_state),
-        Arc::new(DummyIdClaimExtractor::new(String::from("testing"))),
-        SecretString::from("dummy"),
-    );
+    let accounting_api = AccountingApi::new(Arc::new(server_state), SecretString::from("dummy"));
 
-    let req = Request::new(NewItem {
-        name: String::from("test item"),
-        amount: Some(Amount {
-            amount: String::from("100"),
-            currency: String::from("TWD"),
+    let req = with_claims(
+        Request::new(NewItem {
+            name: String::from("test item"),
+            amount: Some(Amount {
+                amount: String::from("100"),
+                currency: String::from("TWD"),
+            }),
+            r#type: AmountType::Expense as i32,
+            tags: Default::default(),
         }),
-        r#type: AmountType::Expense as i32,
-        tags: Default::default(),
-    });
+        USER_SUB,
+    );
     let _response = accounting_api.add(req).await.unwrap();
     let list_items = || async {
-        let list = accounting_api.list(Request::new(())).await.unwrap();
+        let list = accounting_api
+            .list(with_claims(Request::new(()), USER_SUB))
+            .await
+            .unwrap();
         let ItemList { items } = list.into_inner();
         items
     };
@@ -244,12 +257,15 @@ async fn test_update_accounting_item_name() {
     let original_item = items.first().unwrap();
     let item_id = original_item.id.clone();
     let _response = accounting_api
-        .update_item(Request::new(UpdateItemRequest {
-            id: item_id,
-            name: Some(String::from("test item1")),
-            amount: None,
-            occurred_at: None,
-        }))
+        .update_item(with_claims(
+            Request::new(UpdateItemRequest {
+                id: item_id,
+                name: Some(String::from("test item1")),
+                amount: None,
+                occurred_at: None,
+            }),
+            USER_SUB,
+        ))
         .await
         .unwrap();
     let items = list_items().await;
