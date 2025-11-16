@@ -4,41 +4,32 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 
 use crate::{
-    auth::IdClaimExtractor,
+    auth::claims_from_request,
     idl::instance_setting::{Announcement, instance_setting_server::InstanceSetting},
     server::ServerState,
 };
 
-pub struct InstanceSettingApi<I> {
+pub struct InstanceSettingApi {
     state: Arc<ServerState>,
-    id_claim_extractor: Arc<I>,
     administrators: Arc<HashSet<String>>,
 }
 
-impl<I> InstanceSettingApi<I> {
-    pub fn new(
-        state: Arc<ServerState>,
-        id_claim_extractor: Arc<I>,
-        administrators: Arc<HashSet<String>>,
-    ) -> Self {
+impl InstanceSettingApi {
+    pub fn new(state: Arc<ServerState>, administrators: Arc<HashSet<String>>) -> Self {
         Self {
             state,
-            id_claim_extractor,
             administrators,
         }
     }
 }
 
 #[tonic::async_trait]
-impl<I> InstanceSetting for InstanceSettingApi<I>
-where
-    I: IdClaimExtractor + Send + Sync + 'static,
-{
+impl InstanceSetting for InstanceSettingApi {
     async fn set_announcement(
         &self,
         request: Request<Announcement>,
     ) -> tonic::Result<Response<()>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         if !self.administrators.contains(&claims.sub) {
             return Err(Status::permission_denied("you're not an admin"));
         }
@@ -73,7 +64,7 @@ where id = (select id from announcements where hidden_at is null order by create
     }
 
     async fn revoke_announcement(&self, request: Request<()>) -> tonic::Result<Response<()>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         if !self.administrators.contains(&claims.sub) {
             return Err(Status::permission_denied("you're not an admin"));
         }

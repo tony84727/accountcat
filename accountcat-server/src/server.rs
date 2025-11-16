@@ -1,6 +1,6 @@
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
-use axum::Router;
+use axum::{Router, middleware as axum_middleware};
 use clap::Parser;
 use http::header;
 use sqlx::PgPool;
@@ -12,7 +12,6 @@ use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
 
 use crate::{
-    auth::FromSession,
     config::{self, Config},
     csp::{CspLayer, NonceLayer, build_csp},
     idl::{
@@ -21,6 +20,7 @@ use crate::{
         todolist::todolist_server::TodolistServer, user::user_server::UserServer,
     },
     jwtutils::{self, JwtVerifier},
+    middleware,
     serve_dist::ServeDist,
     service::{
         accounting::AccountingApi, instance_setting::InstanceSettingApi, todolist::TodolistApi,
@@ -89,19 +89,13 @@ pub async fn main(arg: &ServerArg) {
         loaded_config.login.client_id,
         administrators.clone(),
     ));
-    let id_claim_extractor = Arc::new(FromSession);
-    let todolist_api = TodolistServer::new(TodolistApi::new(
-        server_state.clone(),
-        id_claim_extractor.clone(),
-    ));
+    let todolist_api = TodolistServer::new(TodolistApi::new(server_state.clone()));
     let accounting_api = AccountingServer::new(AccountingApi::new(
         server_state.clone(),
-        id_claim_extractor.clone(),
         loaded_config.hashids.salt,
     ));
     let instance_setting_api = InstanceSettingServer::new(InstanceSettingApi::new(
         server_state.clone(),
-        id_claim_extractor.clone(),
         administrators.clone(),
     ));
     let mut grpc_server_builder = tonic::service::Routes::builder();
@@ -111,16 +105,24 @@ pub async fn main(arg: &ServerArg) {
     grpc_server_builder.add_service(instance_setting_api);
     let grpc_server = grpc_server_builder.routes();
 
+    let identity_layer = axum_middleware::from_fn(middleware::identity::enforce_identity);
     let app = Router::new()
         .nest(
             "/api",
             grpc_server
                 .clone()
                 .into_axum_router()
+                .layer(identity_layer.clone())
                 .layer(GrpcWebLayer::new())
                 .layer(session_layer.clone()),
         )
-        .nest("/grpc", grpc_server.into_axum_router().layer(session_layer))
+        .nest(
+            "/grpc",
+            grpc_server
+                .into_axum_router()
+                .layer(identity_layer)
+                .layer(session_layer),
+        )
         .fallback_service(asset_service);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();

@@ -3,6 +3,7 @@ pub mod config;
 pub mod csp;
 pub mod idl;
 pub mod jwtutils;
+pub mod middleware;
 pub mod migration;
 pub mod pki;
 pub mod protobufutils;

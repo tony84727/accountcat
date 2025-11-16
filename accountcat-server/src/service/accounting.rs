@@ -9,7 +9,7 @@ use tonic::{Request, Response, Status};
 use tracing::error;
 
 use crate::{
-    auth::IdClaimExtractor,
+    auth::claims_from_request,
     idl::accounting::{
         Amount, AmountType, CurrencyList, DailySpending, DaySpending, DeleteItem, Item, ItemList,
         Last7DayHistogram, MonthlySpending, NewItem, NewTag, Tag, TagList, TagSearch,
@@ -19,20 +19,15 @@ use crate::{
     server::ServerState,
 };
 
-pub struct AccountingApi<I> {
+pub struct AccountingApi {
     state: Arc<ServerState>,
-    id_claim_extractor: Arc<I>,
     hashids: HashIds,
 }
 
-impl<I> AccountingApi<I> {
-    pub fn new(state: Arc<ServerState>, id_claim_extractor: Arc<I>, salt: SecretString) -> Self {
+impl AccountingApi {
+    pub fn new(state: Arc<ServerState>, salt: SecretString) -> Self {
         let hashids = HashIds::builder().with_salt(salt.expose_secret()).finish();
-        Self {
-            state,
-            id_claim_extractor,
-            hashids,
-        }
+        Self { state, hashids }
     }
 
     fn encode_id(&self, id: i32) -> String {
@@ -46,12 +41,9 @@ impl<I> AccountingApi<I> {
 }
 
 #[tonic::async_trait]
-impl<I> Accounting for AccountingApi<I>
-where
-    I: IdClaimExtractor + Send + Sync + 'static,
-{
+impl Accounting for AccountingApi {
     async fn list(&self, request: Request<()>) -> tonic::Result<Response<ItemList>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let items = match sqlx::query!("select accounting_items.id, accounting_items.name, accounting_items.amount, accounting_items.currency, accounting_items.created_at, accounting_items.occurred_at
 from accounting_items
 join users on users.id = accounting_items.user_id
@@ -83,7 +75,7 @@ order by accounting_items.created_at desc", claims.sub)
         Ok(Response::new(ItemList { items }))
     }
     async fn add(&self, request: Request<NewItem>) -> tonic::Result<Response<Item>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let NewItem {
             name,
             amount,
@@ -159,7 +151,7 @@ where users.google_sub = $2 and tags.id = any($3)",
         }))
     }
     async fn complete_tag(&self, request: Request<TagSearch>) -> tonic::Result<Response<TagList>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let TagSearch { keyword } = request.into_inner();
         match sqlx::query!(
             r#"select tags.id, tags.name
@@ -182,7 +174,7 @@ where users.google_sub = $1 and tags.name like $2 escape '\'"#,
     }
 
     async fn create_tag(&self, request: Request<NewTag>) -> tonic::Result<Response<Tag>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let NewTag { name } = request.into_inner();
         match sqlx::query!(
             "insert into tags (user_id, name)
@@ -213,7 +205,7 @@ returning tags.id, tags.name",
     }
 
     async fn delete(&self, request: Request<DeleteItem>) -> tonic::Result<Response<()>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let DeleteItem { id } = request.into_inner();
         let Some(id) = self.decode_id(&id) else {
             return Ok(Response::new(()));
@@ -238,7 +230,7 @@ where users.google_sub = $1 and accounting_items.id = $2 and accounting_items.us
         &self,
         request: Request<UpdateItemRequest>,
     ) -> tonic::Result<Response<()>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let UpdateItemRequest {
             id,
             name,
@@ -280,7 +272,7 @@ where accounting_items.id = $5 and accounting_items.user_id = users.id and users
         &self,
         request: Request<()>,
     ) -> tonic::Result<Response<DailySpending>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let state = match sqlx::query!(
             "select count(*) filter (where accounting_items.currency = 'TWD') count,
                     count(*) filter (where accounting_items.currency != 'TWD') unsupported_count,
@@ -328,7 +320,7 @@ where users.google_sub = $1
         &self,
         request: Request<()>,
     ) -> tonic::Result<Response<Last7DayHistogram>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let data = match sqlx::query!(
             "select
 to_char(histogram.date at time zone 'Asia/Taipei', 'YYYY/MM/DD') date,
@@ -366,7 +358,7 @@ order by histogram.date
         &self,
         request: Request<()>,
     ) -> tonic::Result<Response<YearlySummary>> {
-        let claims = self.id_claim_extractor.get_claims(&request).await?;
+        let claims = claims_from_request(&request)?;
         let months = match sqlx::query!("select
 to_char(histogram.date at time zone 'Asia/Taipei', 'MM') date,
 sum(accounting_items.amount) filter (where accounting_items.amount >= 0) income,

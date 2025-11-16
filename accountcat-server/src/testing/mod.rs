@@ -1,40 +1,30 @@
 use sqlx::PgPool;
-use tonic::{Request, async_trait};
+use tonic::Request;
 
-use crate::{auth::IdClaimExtractor, config, jwtutils::Claims};
+use crate::{config, jwtutils::Claims};
 
 pub mod cwd;
 pub mod test_database;
 use test_database::TestDatabase;
 
-pub struct DummyIdClaimExtractor {
-    claims: Claims,
-}
-
-impl DummyIdClaimExtractor {
-    pub fn new(google_sub: String) -> Self {
-        Self {
-            claims: Claims {
-                iss: Default::default(),
-                azp: Default::default(),
-                aud: Default::default(),
-                sub: google_sub,
-                iat: Default::default(),
-                exp: Default::default(),
-                picture: Default::default(),
-                given_name: Default::default(),
-                family_name: Default::default(),
-                name: Default::default(),
-            },
-        }
+pub fn test_claims(sub: String) -> Claims {
+    Claims {
+        iss: Default::default(),
+        azp: Default::default(),
+        aud: Default::default(),
+        sub,
+        iat: Default::default(),
+        exp: Default::default(),
+        picture: Default::default(),
+        given_name: Default::default(),
+        family_name: Default::default(),
+        name: Default::default(),
     }
 }
 
-#[async_trait]
-impl IdClaimExtractor for DummyIdClaimExtractor {
-    async fn get_claims<T: Send + Sync>(&self, _request: &Request<T>) -> tonic::Result<Claims> {
-        Ok(self.claims.clone())
-    }
+pub fn with_claims<T, S: Into<String>>(mut request: Request<T>, sub: S) -> Request<T> {
+    request.extensions_mut().insert(test_claims(sub.into()));
+    request
 }
 
 pub async fn insert_fake_user(pool: &PgPool) -> sqlx::Result<()> {
