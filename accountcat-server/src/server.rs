@@ -115,10 +115,12 @@ pub async fn main(arg: &ServerArg) {
         .nest(
             "/api",
             grpc_server
+                .clone()
                 .into_axum_router()
                 .layer(GrpcWebLayer::new())
-                .layer(session_layer),
+                .layer(session_layer.clone()),
         )
+        .nest("/grpc", grpc_server.into_axum_router().layer(session_layer))
         .fallback_service(asset_service);
 
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
