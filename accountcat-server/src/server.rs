@@ -7,9 +7,13 @@ use sqlx::PgPool;
 use tokio::signal;
 use tonic_web::GrpcWebLayer;
 use tower::ServiceBuilder;
-use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::{
+    set_header::SetResponseHeaderLayer,
+    trace::{DefaultMakeSpan, DefaultOnResponse, TraceLayer},
+};
 use tower_sessions::SessionManagerLayer;
 use tower_sessions_sqlx_store::PostgresStore;
+use tracing::Level;
 
 use crate::{
     config::{self, Config},
@@ -68,6 +72,11 @@ pub async fn main(arg: &ServerArg) {
     }
     let serve_ui = ServeDist::new(PathBuf::from("ui/dist")).unwrap();
     let asset_service = ServiceBuilder::new()
+        .layer(
+            TraceLayer::new_for_http()
+                .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                .on_response(DefaultOnResponse::new().level(Level::INFO)),
+        )
         .layer(SetResponseHeaderLayer::if_not_present(
             header::CONTENT_SECURITY_POLICY,
             build_csp(None),
@@ -112,6 +121,11 @@ pub async fn main(arg: &ServerArg) {
             grpc_server
                 .clone()
                 .into_axum_router()
+                .layer(
+                    TraceLayer::new_for_grpc()
+                        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                        .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                )
                 .layer(identity_layer.clone())
                 .layer(GrpcWebLayer::new())
                 .layer(session_layer.clone()),
@@ -120,6 +134,11 @@ pub async fn main(arg: &ServerArg) {
             "/grpc",
             grpc_server
                 .into_axum_router()
+                .layer(
+                    TraceLayer::new_for_grpc()
+                        .make_span_with(DefaultMakeSpan::new().level(Level::INFO))
+                        .on_response(DefaultOnResponse::new().level(Level::INFO)),
+                )
                 .layer(identity_layer)
                 .layer(session_layer),
         )
