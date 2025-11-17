@@ -1,9 +1,8 @@
 use sqlx::PgPool;
 
-use crate::config;
+use crate::config::Config;
 
-pub async fn run() {
-    let config = config::load().unwrap();
-    let pool: PgPool = config.database.into();
+pub async fn run(config: &Config) {
+    let pool: PgPool = config.database.clone().into();
     sqlx::migrate!("./migrations").run(&pool).await.unwrap();
 }

@@ -16,7 +16,7 @@ use tower_sessions_sqlx_store::PostgresStore;
 use tracing::Level;
 
 use crate::{
-    config::{self, Config},
+    config::Config,
     csp::{CspLayer, NonceLayer, build_csp},
     idl::{
         accounting::accounting_server::AccountingServer,
@@ -60,10 +60,9 @@ pub struct ServerArg {
     auto_migrate: bool,
 }
 
-pub async fn main(arg: &ServerArg) {
+pub async fn main(arg: &ServerArg, config: &Config) {
     tracing_subscriber::fmt::init();
-    let loaded_config = config::load().expect("load server config");
-    let server_state = Arc::new(init_state(&loaded_config).await);
+    let server_state = Arc::new(init_state(&config).await);
     if arg.auto_migrate {
         sqlx::migrate!("./migrations")
             .run(&server_state.database)
@@ -87,21 +86,17 @@ pub async fn main(arg: &ServerArg) {
     let session_store = PostgresStore::new(server_state.database.clone());
     let session_layer = SessionManagerLayer::new(session_store);
     let administrators = Arc::new(HashSet::from_iter(
-        loaded_config
-            .general
-            .administrators
-            .clone()
-            .unwrap_or_default(),
+        config.general.administrators.clone().unwrap_or_default(),
     ));
     let user_api = UserServer::new(UserApi::new(
         server_state.clone(),
-        loaded_config.login.client_id,
+        config.login.client_id.clone(),
         administrators.clone(),
     ));
     let todolist_api = TodolistServer::new(TodolistApi::new(server_state.clone()));
     let accounting_api = AccountingServer::new(AccountingApi::new(
         server_state.clone(),
-        loaded_config.hashids.salt,
+        config.hashids.salt.clone(),
     ));
     let instance_setting_api = InstanceSettingServer::new(InstanceSettingApi::new(
         server_state.clone(),

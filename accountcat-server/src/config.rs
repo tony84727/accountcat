@@ -18,8 +18,21 @@ pub struct Config {
 }
 
 impl Config {
+    pub fn load(config_file_path: Option<PathBuf>) -> Result<Self, LoadError> {
+        load_from_string(
+            std::fs::read_to_string(
+                config_file_path.unwrap_or_else(|| PathBuf::from("server.toml")),
+            )
+            .ok(),
+        )
+    }
+
     pub fn dump(&self) -> String {
         toml::to_string_pretty(self).unwrap()
+    }
+
+    pub fn print_settings(&self) {
+        println!("{}", self.dump());
     }
 }
 
@@ -63,10 +76,6 @@ impl General {
         self.administrators = self.administrators.or(administrators);
         self
     }
-}
-
-pub fn load() -> Result<Config, LoadError> {
-    load_from_string(std::fs::read_to_string("server.toml").ok())
 }
 
 fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
@@ -226,10 +235,6 @@ impl From<Database> for PgPool {
         let connection = PgConnectOptions::from(value);
         PgPoolOptions::new().connect_lazy_with(connection)
     }
-}
-pub fn print_settings() {
-    let config = load().unwrap();
-    println!("{}", config.dump());
 }
 
 #[cfg(test)]

@@ -6,7 +6,7 @@ use time::Duration;
 use x509_parser::nom::AsBytes;
 
 use crate::{
-    config,
+    config::Config,
     pki::ca::{
         CertificateAuthority, CertificateIssuer, TrackedCertificateIssuer,
         create_option_for_sensitive_data,
@@ -29,9 +29,8 @@ enum Action {
     Issue(IssueArgs),
 }
 
-async fn init() {
-    let config = config::load().unwrap();
-    let ca_dir = config.pki.ca;
+async fn init(config: &Config) {
+    let ca_dir = &config.pki.ca;
     if CertificateAuthority::is_good(&ca_dir) {
         println!(
             "A CA already initialized under {}",
@@ -45,9 +44,8 @@ async fn init() {
     println!("CA initialized successfully");
 }
 
-async fn list() {
-    let config = config::load().unwrap();
-    let pool: PgPool = config.database.into();
+async fn list(config: &Config) {
+    let pool: PgPool = config.database.clone().into();
     let certificates = sqlx::query!(
         "select
             serial,
@@ -96,8 +94,7 @@ struct IssueArgs {
 }
 
 impl IssueArgs {
-    async fn run(&self) {
-        let config = config::load().unwrap();
+    async fn run(&self, config: &Config) {
         let ca_dir = &config.pki.ca;
         let ca = CertificateAuthority::load(ca_dir).unwrap();
         let ca = TrackedCertificateIssuer::new(config.database.clone().into(), ca);
@@ -140,11 +137,11 @@ impl IssueArgs {
 }
 
 impl Command {
-    pub async fn run(&self) {
+    pub async fn run(&self, config: &Config) {
         match &self.action {
-            Action::Init => init().await,
-            Action::List => list().await,
-            Action::Issue(args) => args.run().await,
+            Action::Init => init(config).await,
+            Action::List => list(config).await,
+            Action::Issue(args) => args.run(config).await,
         }
     }
 }

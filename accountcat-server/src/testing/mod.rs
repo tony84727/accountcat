@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 use tonic::Request;
 
-use crate::{config, jwtutils::Claims};
+use crate::{config::Config, jwtutils::Claims};
 
 pub mod cwd;
 pub mod test_database;
@@ -37,7 +37,7 @@ pub async fn insert_fake_user(pool: &PgPool) -> sqlx::Result<()> {
 }
 
 pub async fn create_database() -> TestDatabase {
-    let config = config::load().unwrap();
+    let config = Config::load(None).unwrap();
     TestDatabase::new(String::from("accountcat-testing-"), config.database)
         .await
         .unwrap()
