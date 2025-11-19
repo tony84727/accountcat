@@ -1,11 +1,17 @@
+use std::path::PathBuf;
+
 use accountcat::{
-    config, pki,
+    config::Config,
+    pki,
     server::{self, ServerArg},
 };
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 struct Args {
+    /// Alternative config file to load
+    #[arg(short, long, default_value = "server.toml")]
+    config: PathBuf,
     #[command(subcommand)]
     subcommand: Option<Command>,
 }
@@ -30,11 +36,12 @@ impl Default for Command {
 
 #[tokio::main]
 async fn main() {
-    let args = Args::parse();
-    match args.subcommand.unwrap_or_default() {
-        Command::Server(arg) => server::main(&arg).await,
-        Command::Migrate => accountcat::migration::run().await,
-        Command::Settings => config::print_settings(),
-        Command::Pki(pki_cli) => pki_cli.run().await,
+    let Args { subcommand, config } = Args::parse();
+    let config = Config::load(Some(config)).unwrap();
+    match subcommand.unwrap_or_default() {
+        Command::Server(arg) => server::main(&arg, &config).await,
+        Command::Migrate => accountcat::migration::run(&config).await,
+        Command::Settings => config.print_settings(),
+        Command::Pki(pki_cli) => pki_cli.run(&config).await,
     }
 }
