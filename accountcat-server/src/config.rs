@@ -10,6 +10,7 @@ use sqlx::{
 
 #[derive(Serialize, Deserialize)]
 pub struct Config {
+    pub server: Server,
     pub general: General,
     pub login: Login,
     pub database: Database,
@@ -38,11 +39,33 @@ impl Config {
 
 #[derive(Serialize, Deserialize)]
 pub struct ConfigFile {
+    pub server: Option<Server>,
     pub general: Option<General>,
     pub login: Option<Login>,
     pub database: Option<Database>,
     pub hashids: Option<HashIds>,
     pub pki: Option<Pki>,
+}
+
+#[derive(Serialize, Deserialize, Default)]
+pub struct Server {
+    pub port: Option<u16>,
+}
+
+impl Server {
+    fn from_env() -> Self {
+        Self {
+            port: std::env::var("PORT")
+                .ok()
+                .and_then(|p| p.parse::<u16>().ok()),
+        }
+    }
+
+    fn or(mut self, other: Option<Self>) -> Self {
+        let port = other.and_then(|o| o.port);
+        self.port = self.port.or(port);
+        self
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -88,15 +111,16 @@ fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
             Err(err) => return Err(LoadError::Parse(err)),
         }
     }
-    let (login, database, hashids, general, pki) = match config_file {
+    let (server, login, database, hashids, general, pki) = match config_file {
         Some(config_file) => (
+            config_file.server,
             config_file.login,
             config_file.database,
             config_file.hashids,
             config_file.general,
             config_file.pki,
         ),
-        None => (None, None, None, None, None),
+        None => (None, None, None, None, None, None),
     };
     let login: Login = std::env::var("GOOGLE_LOGIN_CLIENT_ID")
         .ok()
@@ -123,7 +147,9 @@ fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
         .or(pki)
         .unwrap_or_default();
     let general = General::from_env().or(general);
+    let server = Server::from_env().or(server).or(Some(Default::default()));
     Ok(Config {
+        server,
         general,
         login,
         database,

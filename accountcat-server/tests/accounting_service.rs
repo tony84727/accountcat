@@ -21,6 +21,7 @@ async fn init_test_database_and_server_state() -> (TestDatabase, ServerState) {
     let test_database = testing::create_database().await;
     let TestDatabase { database } = &test_database;
     let server_state = init_state(&Config {
+        server: Default::default(),
         general: General::default(),
         login: Login {
             client_id: SecretString::from("dummy"),
