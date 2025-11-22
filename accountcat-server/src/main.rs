@@ -9,9 +9,9 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
 struct Args {
-    /// Alternative config file to load
-    #[arg(short, long, default_value = "server.toml")]
-    config: PathBuf,
+    /// Alternative config file to load [default: server.toml]
+    #[arg(short, long)]
+    config: Option<PathBuf>,
     #[command(subcommand)]
     subcommand: Option<Command>,
 }
@@ -37,7 +37,7 @@ impl Default for Command {
 #[tokio::main]
 async fn main() {
     let Args { subcommand, config } = Args::parse();
-    let config = Config::load(Some(config)).unwrap();
+    let config = Config::load(config).unwrap();
     match subcommand.unwrap_or_default() {
         Command::Server(arg) => server::main(&arg, &config).await,
         Command::Migrate => accountcat::migration::run(&config).await,

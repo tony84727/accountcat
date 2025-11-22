@@ -20,12 +20,14 @@ pub struct Config {
 
 impl Config {
     pub fn load(config_file_path: Option<PathBuf>) -> Result<Self, LoadError> {
-        load_from_string(
-            std::fs::read_to_string(
-                config_file_path.unwrap_or_else(|| PathBuf::from("server.toml")),
-            )
-            .ok(),
-        )
+        let config_content = if let Some(path) = config_file_path {
+            std::fs::read_to_string(path)
+                .map(Some)
+                .map_err(LoadError::IO)?
+        } else {
+            std::fs::read_to_string("server.toml").ok()
+        };
+        load_from_string(config_content)
     }
 
     pub fn dump(&self) -> String {
@@ -298,5 +300,34 @@ salt = "salt"
 "#;
         let config = load_from_string(Some(String::from(toml))).unwrap();
         assert_eq!(vec!["a", "b", "c"], config.general.administrators.unwrap());
+    }
+
+    #[test]
+    fn test_load_explicit_path_not_found() {
+        use crate::config::{Config, LoadError};
+        use std::path::PathBuf;
+        let result = Config::load(Some(PathBuf::from("non_existent_config.toml")));
+        assert!(matches!(result, Err(LoadError::IO(_))));
+    }
+
+    #[test]
+    fn test_load_implicit_path_not_found_ok() {
+        use crate::config::{Config, LoadError};
+        use crate::testing::cwd::ChangeCwd;
+        use temp_dir::TempDir;
+
+        // Create a temp dir to ensure no server.toml exists
+        let temp = TempDir::new().unwrap();
+
+        // Change to temp dir using helper
+        let _cwd_guard = ChangeCwd::new(temp.path().to_path_buf());
+
+        // Run test
+        let result = Config::load(None);
+
+        assert!(
+            !matches!(result, Err(LoadError::IO(_))),
+            "Should not return IO error for implicit path"
+        );
     }
 }
