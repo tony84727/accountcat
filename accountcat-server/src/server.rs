@@ -139,7 +139,8 @@ pub async fn main(arg: &ServerArg, config: &Config) {
         )
         .fallback_service(asset_service);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
+    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.server.port.unwrap_or(3000)));
+    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     axum::serve(listener, app)
         .with_graceful_shutdown(shutdown_signal())
         .await
