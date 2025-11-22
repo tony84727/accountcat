@@ -147,7 +147,7 @@ fn load_from_string(config: Option<String>) -> Result<Config, LoadError> {
         .or(pki)
         .unwrap_or_default();
     let general = General::from_env().or(general);
-    let server = Server::from_env().or(server).or(Some(Default::default()));
+    let server = Server::from_env().or(server);
     Ok(Config {
         server,
         general,
