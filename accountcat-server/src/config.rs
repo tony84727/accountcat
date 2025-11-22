@@ -20,9 +20,10 @@ pub struct Config {
 
 impl Config {
     pub fn load(config_file_path: Option<PathBuf>) -> Result<Self, LoadError> {
-        let config_content = match config_file_path {
-            Some(path) => Some(std::fs::read_to_string(path).map_err(LoadError::IO)?),
-            None => std::fs::read_to_string("server.toml").ok(),
+        let config_content = if let Some(path) = config_file_path {
+            std::fs::read_to_string(path).map(Some).map_err(LoadError::IO)?
+        } else {
+            std::fs::read_to_string("server.toml").ok()
         };
         load_from_string(config_content)
     }
