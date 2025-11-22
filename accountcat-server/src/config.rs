@@ -21,7 +21,9 @@ pub struct Config {
 impl Config {
     pub fn load(config_file_path: Option<PathBuf>) -> Result<Self, LoadError> {
         let config_content = if let Some(path) = config_file_path {
-            std::fs::read_to_string(path).map(Some).map_err(LoadError::IO)?
+            std::fs::read_to_string(path)
+                .map(Some)
+                .map_err(LoadError::IO)?
         } else {
             std::fs::read_to_string("server.toml").ok()
         };
@@ -323,9 +325,9 @@ salt = "salt"
         // Run test
         let result = Config::load(None);
 
-        match result {
-            Err(LoadError::IO(_)) => panic!("Should not return IO error for implicit path"),
-            _ => {}
-        }
+        assert!(
+            !matches!(result, Err(LoadError::IO(_))),
+            "Should not return IO error for implicit path"
+        );
     }
 }
