@@ -65,9 +65,15 @@ const ASSET_CSP_NONCE_PLACEHOLDER: &str = "__CSP_NONCE__";
 
 fn inject_nonce(Nonce(nonce): &Nonce, source: Vec<u8>) -> Vec<u8> {
     match String::from_utf8(source) {
-        Ok(file_string) => file_string
-            .replace(ASSET_CSP_NONCE_PLACEHOLDER, nonce)
-            .into_bytes(),
+        Ok(file_string) => {
+            if file_string.contains(ASSET_CSP_NONCE_PLACEHOLDER) {
+                file_string
+                    .replace(ASSET_CSP_NONCE_PLACEHOLDER, nonce)
+                    .into_bytes()
+            } else {
+                file_string.into_bytes()
+            }
+        }
         Err(err) => err.into_bytes(),
     }
 }
@@ -182,5 +188,29 @@ mod tests {
             buf
         };
         assert_eq!(expected_bytes, response);
+    }
+
+    #[test]
+    fn test_inject_nonce() {
+        use crate::serve_dist::inject_nonce;
+        use crate::csp::Nonce;
+
+        let nonce = Nonce("test-nonce".to_string());
+
+        // Test missing placeholder text (should not allocate and remain the same)
+        let source = b"<html><head></head><body>hello</body></html>".to_vec();
+        let result = inject_nonce(&nonce, source.clone());
+        assert_eq!(result, source);
+
+        // Test with placeholder text
+        let source = b"<html><head><script nonce=\"__CSP_NONCE__\"></script></head><body>hello</body></html>".to_vec();
+        let result = inject_nonce(&nonce, source);
+        let expected = b"<html><head><script nonce=\"test-nonce\"></script></head><body>hello</body></html>".to_vec();
+        assert_eq!(result, expected);
+
+        // Test binary / invalid UTF-8
+        let source = vec![0xFF, 0xFE, 0xFD];
+        let result = inject_nonce(&nonce, source.clone());
+        assert_eq!(result, source);
     }
 }
