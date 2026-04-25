@@ -1,8 +1,8 @@
 use std::{fs::File, io::Write, process::exit};
 
-use clap::{Parser, Subcommand};
-use sqlx::PgPool;
-use time::Duration;
+use clap::{Args, Parser, Subcommand};
+use sqlx::{FromRow, PgPool, types::BigDecimal};
+use time::{Duration, OffsetDateTime};
 use x509_parser::nom::AsBytes;
 
 use crate::{
@@ -22,7 +22,7 @@ pub struct Command {
 #[derive(Subcommand)]
 enum Action {
     /// List issued certificates order by NotAfter in decreasing order
-    List,
+    List(ListArgs),
     /// Initialize Certificate Authority
     Init,
     /// Issue a certificate for entity
@@ -37,9 +37,62 @@ async fn init(config: &Config) {
     }
 }
 
-async fn list(config: &Config) {
+#[derive(Args)]
+struct ListArgs {
+    /// List only certificate authorities
+    #[arg(long)]
+    ca: bool,
+}
+
+#[derive(FromRow)]
+struct ListedCertificate {
+    serial: BigDecimal,
+    country: Option<String>,
+    state: Option<String>,
+    locality: Option<String>,
+    organization: Option<String>,
+    organizational_unit: Option<String>,
+    common_name: Option<String>,
+    not_before: OffsetDateTime,
+    not_after: OffsetDateTime,
+    is_ca: bool,
+    trusted: bool,
+    has_private_key: bool,
+}
+
+impl ListedCertificate {
+    fn can_issue(&self, now: OffsetDateTime) -> bool {
+        self.is_ca && self.trusted && self.has_private_key && self.not_after > now
+    }
+
+    fn lines(&self, now: OffsetDateTime) -> Vec<String> {
+        let (serial, _) = self.serial.clone().into_bigint_and_scale();
+        vec![
+            format!("{:X}", serial),
+            format!(
+                "\tDN: C={},ST={},L={},O={},OU={},CN={}",
+                self.country.clone().unwrap_or_default(),
+                self.state.clone().unwrap_or_default(),
+                self.locality.clone().unwrap_or_default(),
+                self.organization.clone().unwrap_or_default(),
+                self.organizational_unit.clone().unwrap_or_default(),
+                self.common_name.clone().unwrap_or_default(),
+            ),
+            format!("\tCA: {}", yes_no(self.is_ca)),
+            format!("\tCanIssue: {}", yes_no(self.can_issue(now))),
+            format!("\tNotBefore: {}", self.not_before),
+            format!("\tNotAfter: {}", self.not_after),
+        ]
+    }
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
+}
+
+async fn list(config: &Config, args: &ListArgs) {
     let pool: PgPool = config.database.clone().into();
-    let certificates = sqlx::query!(
+    let certificates = sqlx::query_as::<_, ListedCertificate>(
         "select
             serial,
             country,
@@ -49,10 +102,15 @@ async fn list(config: &Config) {
             organizational_unit,
             common_name,
             not_before,
-            not_after
+            not_after,
+            is_ca,
+            trusted,
+            private_key_der is not null as has_private_key
         from certificates
-        order by not_after desc"
+        where (not $1 or is_ca)
+        order by not_after desc",
     )
+    .bind(args.ca)
     .fetch_all(&pool)
     .await
     .unwrap();
@@ -60,20 +118,11 @@ async fn list(config: &Config) {
         println!("<No Certificate>");
         return;
     }
-    for c in certificates.into_iter() {
-        let (serial, _) = c.serial.into_bigint_and_scale();
-        println!("{:X}", serial);
-        println!(
-            "\tDN: C={},ST={},L={},O={},OU={},CN={}",
-            c.country.unwrap_or_default(),
-            c.state.unwrap_or_default(),
-            c.locality.unwrap_or_default(),
-            c.organization.unwrap_or_default(),
-            c.organizational_unit.unwrap_or_default(),
-            c.common_name.unwrap_or_default(),
-        );
-        println!("\tNotBefore: {}", c.not_before);
-        println!("\tNotAfter: {}", c.not_after);
+    let now = OffsetDateTime::now_utc();
+    for certificate in certificates {
+        for line in certificate.lines(now) {
+            println!("{line}");
+        }
     }
 }
 
@@ -134,8 +183,84 @@ impl Command {
     pub async fn run(&self, config: &Config) {
         match &self.action {
             Action::Init => init(config).await,
-            Action::List => list(config).await,
+            Action::List(args) => list(config, args).await,
             Action::Issue(args) => args.run(config).await,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Command, ListedCertificate};
+    use clap::Parser;
+    use sqlx::types::BigDecimal;
+    use time::{Duration, OffsetDateTime};
+
+    fn listed_certificate(
+        is_ca: bool,
+        trusted: bool,
+        has_private_key: bool,
+        not_after: OffsetDateTime,
+    ) -> ListedCertificate {
+        ListedCertificate {
+            serial: BigDecimal::from(255_i32),
+            country: Some(String::from("TW")),
+            state: Some(String::from("Taipei")),
+            locality: Some(String::from("Taipei")),
+            organization: Some(String::from("Accountcat")),
+            organizational_unit: Some(String::from("PKI")),
+            common_name: Some(String::from("testing")),
+            not_before: OffsetDateTime::UNIX_EPOCH,
+            not_after,
+            is_ca,
+            trusted,
+            has_private_key,
+        }
+    }
+
+    #[test]
+    fn listed_certificate_reports_active_ca_as_issuable() {
+        let now = OffsetDateTime::now_utc();
+        let certificate = listed_certificate(true, true, true, now + Duration::days(1));
+
+        let lines = certificate.lines(now);
+
+        assert!(lines.iter().any(|line| line == "\tCA: yes"));
+        assert!(lines.iter().any(|line| line == "\tCanIssue: yes"));
+    }
+
+    #[test]
+    fn listed_certificate_requires_private_key_to_issue() {
+        let now = OffsetDateTime::now_utc();
+        let certificate = listed_certificate(true, true, false, now + Duration::days(1));
+
+        assert!(!certificate.can_issue(now));
+    }
+
+    #[test]
+    fn listed_certificate_requires_unexpired_validity_to_issue() {
+        let now = OffsetDateTime::now_utc();
+        let certificate = listed_certificate(true, true, true, now - Duration::seconds(1));
+
+        assert!(!certificate.can_issue(now));
+    }
+
+    #[test]
+    fn listed_certificate_requires_trust_to_issue() {
+        let now = OffsetDateTime::now_utc();
+        let certificate = listed_certificate(true, false, true, now + Duration::days(1));
+
+        assert!(!certificate.can_issue(now));
+    }
+
+    #[test]
+    fn listed_certificate_requires_ca_to_issue() {
+        let now = OffsetDateTime::now_utc();
+        let certificate = listed_certificate(false, true, true, now + Duration::days(1));
+
+        let lines = certificate.lines(now);
+
+        assert!(lines.iter().any(|line| line == "\tCA: no"));
+        assert!(lines.iter().any(|line| line == "\tCanIssue: no"));
     }
 }
