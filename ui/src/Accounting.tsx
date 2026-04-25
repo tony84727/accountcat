@@ -7,6 +7,7 @@ import Grid from "@mui/material/Grid";
 import InputLabel from "@mui/material/InputLabel";
 import MenuItem from "@mui/material/MenuItem";
 import Select, { type SelectChangeEvent } from "@mui/material/Select";
+import Snackbar from "@mui/material/Snackbar";
 import Table from "@mui/material/Table";
 import TableBody from "@mui/material/TableBody";
 import TableCell from "@mui/material/TableCell";
@@ -22,6 +23,7 @@ import {
 	useState,
 } from "react";
 import {
+	catchError,
 	combineLatestWith,
 	defer,
 	from,
@@ -29,12 +31,14 @@ import {
 	mergeMap,
 	mergeWith,
 	type Observable,
+	of,
 	Subject,
 	share,
 	startWith,
 	switchMap,
 	take,
 	takeUntil,
+	timer,
 	toArray,
 	withLatestFrom,
 } from "rxjs";
@@ -106,6 +110,8 @@ export default function Accounting() {
 	const [confirmItem, setConfirmItem] = useState<Item>();
 	const [onConfirmDelete, registerOnConfirmDelete] = useState<() => void>();
 	const [onCancelDelete, registerOnCancelDelete] = useState<() => void>();
+	const [showSnackbar, setShowSnackbar] = useState(false);
+	const [snackbarMessage, setSnackbarMessage] = useState("");
 	useEffect(() => {
 		const bye$ = new Subject();
 		const accountingService = new AccountingClient("/api");
@@ -175,14 +181,6 @@ export default function Accounting() {
 			switchMap((request) => accountingService.updateItem(request)),
 			share(),
 		);
-		const confirmItem$ = deleteItem$.pipe(
-			mergeWith(
-				cancelDelete$.pipe(
-					mergeWith(defer(() => deleteResult$)),
-					map(() => undefined),
-				),
-			),
-		);
 		const confirmedDeleteItem$ = deleteItem$.pipe(
 			switchMap((item) =>
 				confirmDelete$.pipe(
@@ -196,16 +194,47 @@ export default function Accounting() {
 			switchMap((item) => {
 				const deleteItem = new DeleteItem();
 				deleteItem.setId(item.getId());
-				return accountingService.delete(deleteItem);
+				return from(accountingService.delete(deleteItem)).pipe(
+					map((response) => ({ success: true, item: response })),
+					catchError((err) => of({ success: false, error: err })),
+				);
 			}),
 			share(),
 		);
+		const confirmItem$ = deleteItem$.pipe(
+			mergeWith(
+				cancelDelete$.pipe(
+					mergeWith(defer(() => deleteResult$)),
+					map(() => undefined),
+				),
+			),
+		);
 		const items$ = addResult$.pipe(
-			mergeWith(deleteResult$, updateResult$),
+			mergeWith(
+				deleteResult$.pipe(
+					map((result) => (result.success ? result.item : undefined)),
+				),
+				updateResult$,
+			),
 			startWith(undefined),
 			switchMap(() => accountingService.list(new Empty())),
 			map((list) => list.getItemsList()),
 			share(),
+		);
+		const showSnackbar$ = deleteResult$.pipe(
+			map((result) => !result.success),
+			switchMap((show) =>
+				show
+					? timer(5000).pipe(
+							map(() => false),
+							take(1),
+							startWith(true),
+						)
+					: of(false),
+			),
+		);
+		const snackbarMessage$ = deleteResult$.pipe(
+			map((result) => (result.success ? "" : "刪除失敗")),
 		);
 		const tagKeyword$ = onTagInputChange$.pipe(map(([, keyword]) => keyword));
 		const completeResults$ = tagKeyword$.pipe(
@@ -276,11 +305,14 @@ export default function Accounting() {
 		currency$.pipe(takeUntil(bye$)).subscribe(setCurrency);
 		amountType$.pipe(takeUntil(bye$)).subscribe(setAmountType);
 		confirmItem$.pipe(takeUntil(bye$)).subscribe(setConfirmItem);
+		showSnackbar$.pipe(takeUntil(bye$)).subscribe(setShowSnackbar);
+		snackbarMessage$.pipe(takeUntil(bye$)).subscribe(setSnackbarMessage);
 
 		return () => bye$.next(undefined);
 	}, []);
 	return (
 		<Container>
+			<Snackbar message={snackbarMessage} open={showSnackbar} />
 			<ConfirmDeleteItem
 				item={confirmItem}
 				onClose={onCancelDelete}
