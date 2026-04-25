@@ -29,19 +29,28 @@ impl JwtVerifier {
     pub fn verify(&self, token: &str) -> Result<Claims, jsonwebtoken::errors::Error> {
         let header = decode_header(token)?;
         let mut last_error = None;
-        for k in self.jwk_sets.keys.iter() {
-            let mut validation = Validation::new(header.alg);
-            validation.set_audience(&[self.client_id.expose_secret()]);
-            match decode::<Claims>(token, &DecodingKey::from_jwk(k)?, &validation) {
-                Ok(data) => {
-                    return Ok(data.claims);
-                }
-                Err(err) => {
-                    last_error = Some(err);
-                }
-            };
+
+        if let Some(kid) = &header.kid {
+            if let Some(k) = self.jwk_sets.find(kid) {
+                let mut validation = Validation::new(header.alg);
+                validation.set_audience(&[self.client_id.expose_secret()]);
+                match decode::<Claims>(token, &DecodingKey::from_jwk(k)?, &validation) {
+                    Ok(data) => return Ok(data.claims),
+                    Err(err) => last_error = Some(err),
+                };
+            }
+        } else {
+            for k in self.jwk_sets.keys.iter() {
+                let mut validation = Validation::new(header.alg);
+                validation.set_audience(&[self.client_id.expose_secret()]);
+                match decode::<Claims>(token, &DecodingKey::from_jwk(k)?, &validation) {
+                    Ok(data) => return Ok(data.claims),
+                    Err(err) => last_error = Some(err),
+                };
+            }
         }
-        Err(last_error.unwrap())
+
+        Err(last_error.unwrap_or_else(|| jsonwebtoken::errors::ErrorKind::InvalidToken.into()))
     }
 }
 
