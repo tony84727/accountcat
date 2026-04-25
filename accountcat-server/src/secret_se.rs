@@ -50,5 +50,9 @@ mod tests {
         assert!(serialized.contains("secret = \"<hidden>\""));
         assert!(serialized.contains("optional_secret_some = \"<hidden>\""));
         assert!(serialized.contains("optional_secret_none = \"None\""));
+
+        // Ensure the actual secrets are not present in the serialized output
+        assert!(!serialized.contains("password123"));
+        assert!(!serialized.contains("secret456"));
     }
 }
