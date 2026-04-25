@@ -30,18 +30,11 @@ enum Action {
 }
 
 async fn init(config: &Config) {
-    let ca_dir = &config.pki.ca;
-    if CertificateAuthority::is_good(&ca_dir) {
-        println!(
-            "A CA already initialized under {}",
-            ca_dir.to_string_lossy()
-        );
-        return;
+    let pool: PgPool = config.database.clone().into();
+    match CertificateAuthority::initialize(&pool).await {
+        Ok(_) => println!("CA initialized successfully"),
+        Err(err) => panic!("{err}"),
     }
-    let ca = CertificateAuthority::generate().unwrap();
-    std::fs::create_dir_all(&ca_dir).unwrap();
-    ca.save(ca_dir).unwrap();
-    println!("CA initialized successfully");
 }
 
 async fn list(config: &Config) {
@@ -95,9 +88,10 @@ struct IssueArgs {
 
 impl IssueArgs {
     async fn run(&self, config: &Config) {
-        let ca_dir = &config.pki.ca;
-        let ca = CertificateAuthority::load(ca_dir).unwrap();
+        let pool: PgPool = config.database.clone().into();
+        let ca = CertificateAuthority::load(&pool).await.unwrap();
         let ca = TrackedCertificateIssuer::new(config.database.clone().into(), ca);
+        let ca_dir = &config.pki.ca;
         let certificates_dir = ca_dir.join("certificates");
         let _ = std::fs::create_dir_all(&certificates_dir);
         if !certificates_dir.is_dir() {

@@ -1,25 +1,20 @@
-use std::{
-    fs::{File, OpenOptions},
-    io::{Read, Write},
-    os::unix::fs::OpenOptionsExt,
-    path::{Path, PathBuf},
-};
+use std::{fs::OpenOptions, os::unix::fs::OpenOptionsExt};
 
-use rcgen::{Issuer, KeyPair, PKCS_ED25519};
+use rcgen::{
+    BasicConstraints, CertificateParams, DnType, IsCa, Issuer, KeyPair, KeyUsagePurpose,
+    PKCS_ED25519,
+};
 use rustls_pki_types::CertificateDer;
-use sqlx::{PgPool, types::BigDecimal};
+use sqlx::{Executor, PgPool, Postgres, Row, types::BigDecimal};
 use thiserror::Error;
 use time::{Duration, OffsetDateTime};
 use tonic::async_trait;
-use x509_parser::{nom::AsBytes, x509::AttributeTypeAndValue};
+use x509_parser::x509::AttributeTypeAndValue;
 
 use crate::pki::{
     crt::IssuedCertificate,
     csr::{CreateError, ToBeSignedCertificate},
 };
-
-const KEYPAIR_SUBPATH: &str = "key.p8";
-const CERTIFICATE_SUBPATH: &str = "ca.crt";
 
 pub(crate) fn create_option_for_sensitive_data() -> OpenOptions {
     let mut options = OpenOptions::new();
@@ -29,6 +24,7 @@ pub(crate) fn create_option_for_sensitive_data() -> OpenOptions {
 
 #[derive(Debug)]
 pub struct CertificateAuthority {
+    id: Option<i32>,
     keypair: KeyPair,
     certificate_der: Vec<u8>,
 }
@@ -37,6 +33,7 @@ impl PartialEq for CertificateAuthority {
     fn eq(&self, other: &Self) -> bool {
         self.keypair.algorithm() == other.keypair.algorithm()
             && self.keypair.serialized_der() == other.keypair.serialized_der()
+            && self.certificate_der == other.certificate_der
     }
 }
 
@@ -45,56 +42,76 @@ impl Eq for CertificateAuthority {}
 impl CertificateAuthority {
     pub fn generate() -> Result<Self, GenerateError> {
         let keypair = KeyPair::generate_for(&PKCS_ED25519)?;
-        let tbs = ToBeSignedCertificate::create(
-            "Root CA",
-            OffsetDateTime::now_utc(),
-            OffsetDateTime::now_utc().saturating_add(Duration::days(3650)),
-        )?;
-        let certificate = tbs.self_signed(&keypair)?;
+        let mut params = CertificateParams::default();
+        params.distinguished_name.push(DnType::CountryName, "TW");
+        params
+            .distinguished_name
+            .push(DnType::OrganizationName, "Accountcat project");
+        params
+            .distinguished_name
+            .push(DnType::CommonName, "Root CA");
+        params.not_before = OffsetDateTime::now_utc();
+        params.not_after = params.not_before.saturating_add(Duration::days(3650));
+        params.is_ca = IsCa::Ca(BasicConstraints::Unconstrained);
+        params.key_usages = vec![
+            KeyUsagePurpose::DigitalSignature,
+            KeyUsagePurpose::KeyCertSign,
+            KeyUsagePurpose::CrlSign,
+        ];
+        let certificate = params.self_signed(&keypair)?;
         Ok(Self {
+            id: None,
             keypair,
             certificate_der: certificate.der().to_vec(),
         })
     }
 
-    pub fn save<P: AsRef<Path>>(&self, directory: P) -> Result<(), SaveError> {
-        if !directory.as_ref().is_dir() {
-            return Err(SaveError::NotDirectory);
-        }
-        let keypair_out = directory.as_ref().join(KEYPAIR_SUBPATH);
-        let mut keypair = create_option_for_sensitive_data().open(keypair_out)?;
-        keypair.write_all(self.keypair.serialize_pem().as_bytes())?;
-        let cert_out = directory.as_ref().join(CERTIFICATE_SUBPATH);
-        let mut cert = File::create(cert_out)?;
-        cert.write_all(&self.certificate_der)?;
-        Ok(())
+    pub async fn initialize(db: &PgPool) -> Result<Self, InitializeError> {
+        let mut certificate_authority = Self::generate()?;
+        let metadata = CertificateMetadata::parse(&certificate_authority.certificate_der)?;
+        let certificate_id = insert_certificate(
+            db,
+            &metadata,
+            true,
+            true,
+            None,
+            &certificate_authority.certificate_der,
+            Some(certificate_authority.keypair.serialized_der()),
+        )
+        .await?;
+        certificate_authority.id = Some(certificate_id);
+        Ok(certificate_authority)
     }
 
-    pub fn load<P: AsRef<Path>>(directory: P) -> Result<Self, LoadError> {
-        if !directory.as_ref().is_dir() {
-            return Err(LoadError::NotDirectory);
-        }
-        let keypair_path = directory.as_ref().join(KEYPAIR_SUBPATH);
-        let cert_path = directory.as_ref().join(CERTIFICATE_SUBPATH);
-        if !keypair_path.is_file() {
-            return Err(LoadError::MissingKeyPair(keypair_path));
-        }
-        if !cert_path.is_file() {
-            return Err(LoadError::MissingCertificate(cert_path));
-        }
-        let mut cert_content = Vec::new();
-        let mut cert = File::open(&cert_path)?;
-        cert.read_to_end(&mut cert_content)?;
-        let keypair = std::fs::read_to_string(keypair_path)?;
-        let keypair = KeyPair::from_pem(&keypair)?;
+    pub async fn load(db: &PgPool) -> Result<Self, LoadError> {
+        let row = sqlx::query(
+            "select
+                id,
+                private_key_der,
+                der as certificate_der
+            from certificates
+            where trusted
+                and is_ca
+                and der is not null
+                and private_key_der is not null
+            order by created_at desc, id desc
+            limit 1",
+        )
+        .fetch_optional(db)
+        .await?
+        .ok_or(LoadError::MissingTrustedCa)?;
+        let certificate_der: Option<Vec<u8>> = row.try_get("certificate_der")?;
+        let certificate_der = certificate_der.ok_or(LoadError::MissingStoredCertificateDer)?;
+        let keypair = KeyPair::try_from(row.try_get::<Vec<u8>, _>("private_key_der")?)?;
         Ok(Self {
+            id: Some(row.try_get("id")?),
             keypair,
-            certificate_der: cert_content.as_bytes().to_vec(),
+            certificate_der,
         })
     }
 
-    pub fn is_good<P: AsRef<Path>>(directory: P) -> bool {
-        Self::load(directory).is_ok()
+    pub fn certificate_der(&self) -> &[u8] {
+        &self.certificate_der
     }
 
     pub fn issue_with_date(
@@ -118,6 +135,10 @@ impl CertificateAuthority {
 
 #[async_trait]
 impl CertificateIssuer for CertificateAuthority {
+    fn issuer_certificate_id(&self) -> Option<i32> {
+        self.id
+    }
+
     async fn issue(
         &self,
         subject: &str,
@@ -135,6 +156,10 @@ impl CertificateIssuer for CertificateAuthority {
 
 #[async_trait]
 pub trait CertificateIssuer<E = IssueError> {
+    fn issuer_certificate_id(&self) -> Option<i32> {
+        None
+    }
+
     async fn issue(&self, subject: &str, duration: Duration) -> Result<IssuedCertificate, E>;
 }
 
@@ -159,92 +184,156 @@ impl<I: CertificateIssuer + Send + Sync> CertificateIssuer<TrackedIssueError>
         duration: Duration,
     ) -> Result<IssuedCertificate, TrackedIssueError> {
         let issued = self.issuer.issue(subject, duration).await?;
-        let (_, parsed) = x509_parser::parse_x509_certificate(issued.certificate.der())?;
+        let metadata = CertificateMetadata::parse(issued.certificate.der())?;
+        insert_certificate(
+            &self.db,
+            &metadata,
+            false,
+            false,
+            self.issuer.issuer_certificate_id(),
+            issued.certificate.der(),
+            Some(issued.key.serialized_der()),
+        )
+        .await?;
+        Ok(issued)
+    }
+}
+
+struct CertificateMetadata {
+    serial: BigDecimal,
+    dn: Vec<u8>,
+    country: Option<String>,
+    state: Option<String>,
+    locality: Option<String>,
+    organization: Option<String>,
+    organizational_unit: Option<String>,
+    common_name: Option<String>,
+    not_before: OffsetDateTime,
+    not_after: OffsetDateTime,
+}
+
+impl CertificateMetadata {
+    fn parse(
+        certificate_der: &[u8],
+    ) -> Result<Self, x509_parser::asn1_rs::Err<x509_parser::error::X509Error>> {
+        let (_, parsed) = x509_parser::parse_x509_certificate(certificate_der)?;
         let serial = BigDecimal::from_biguint(parsed.serial.clone(), 0);
         let dn = parsed.subject();
-        let raw_dn = parsed.subject().as_raw();
-        fn optional_rdn<'n, I: Iterator<Item = &'n AttributeTypeAndValue<'n>>>(
-            mut iter: I,
-        ) -> Option<String> {
-            iter.next().and_then(|x| x.as_str().ok()).map(String::from)
-        }
-        let country = optional_rdn(dn.iter_country());
-        let state = optional_rdn(dn.iter_state_or_province());
-        let locality = optional_rdn(dn.iter_locality());
-        let organization = optional_rdn(dn.iter_organization());
-        let organizational_unit = optional_rdn(dn.iter_organizational_unit());
-        let common_name = optional_rdn(dn.iter_common_name());
-        sqlx::query!(
-            "insert into certificates (
-                serial,
-                dn,
-                country,
-                state,
-                locality,
-                organization,
-                organizational_unit,
-                common_name,
-                not_before,
-                not_after
-            ) values (
-                $1,
-                $2,
-                $3,
-                $4,
-                $5,
-                $6,
-                $7,
-                $8,
-                $9,
-                $10
-            )",
+        Ok(Self {
             serial,
-            raw_dn,
+            dn: dn.as_raw().to_vec(),
+            country: optional_rdn(dn.iter_country()),
+            state: optional_rdn(dn.iter_state_or_province()),
+            locality: optional_rdn(dn.iter_locality()),
+            organization: optional_rdn(dn.iter_organization()),
+            organizational_unit: optional_rdn(dn.iter_organizational_unit()),
+            common_name: optional_rdn(dn.iter_common_name()),
+            not_before: parsed.validity().not_before.to_datetime(),
+            not_after: parsed.validity().not_after.to_datetime(),
+        })
+    }
+}
+
+fn optional_rdn<'n, I: Iterator<Item = &'n AttributeTypeAndValue<'n>>>(
+    mut iter: I,
+) -> Option<String> {
+    iter.next().and_then(|x| x.as_str().ok()).map(String::from)
+}
+
+async fn insert_certificate<'e, E>(
+    executor: E,
+    metadata: &CertificateMetadata,
+    is_ca: bool,
+    trusted: bool,
+    issuer_certificate_id: Option<i32>,
+    der: &[u8],
+    private_key_der: Option<&[u8]>,
+) -> Result<i32, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let row = sqlx::query(
+        "insert into certificates (
+            serial,
+            dn,
             country,
             state,
             locality,
             organization,
             organizational_unit,
             common_name,
-            issued.params.not_before,
-            issued.params.not_after,
+            not_before,
+            not_after,
+            der,
+            private_key_der,
+            issuer_certificate_id,
+            is_ca,
+            trusted
+        ) values (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            $8,
+            $9,
+            $10,
+            $11,
+            $12,
+            $13,
+            $14,
+            $15
         )
-        .execute(&self.db)
-        .await?;
-        Ok(issued)
-    }
-}
-
-#[derive(Error, Debug)]
-pub enum SaveError {
-    #[error("saving target isn't a directory")]
-    NotDirectory,
-    #[error("saving CA encounters an IO issue")]
-    IO(#[from] std::io::Error),
+        returning id",
+    )
+    .bind(&metadata.serial)
+    .bind(&metadata.dn)
+    .bind(&metadata.country)
+    .bind(&metadata.state)
+    .bind(&metadata.locality)
+    .bind(&metadata.organization)
+    .bind(&metadata.organizational_unit)
+    .bind(&metadata.common_name)
+    .bind(metadata.not_before)
+    .bind(metadata.not_after)
+    .bind(der)
+    .bind(private_key_der)
+    .bind(issuer_certificate_id)
+    .bind(is_ca)
+    .bind(trusted)
+    .fetch_one(executor)
+    .await?;
+    row.try_get("id")
 }
 
 #[derive(Error, Debug)]
 pub enum LoadError {
-    #[error("loading target isn't a directory")]
-    NotDirectory,
-    #[error("missing keypair or inaccessible at {0}")]
-    MissingKeyPair(PathBuf),
-    #[error("missing certificate or inaccessible at {0}")]
-    MissingCertificate(PathBuf),
+    #[error("no trusted certificate authority found")]
+    MissingTrustedCa,
+    #[error("active certificate authority is missing certificate der")]
+    MissingStoredCertificateDer,
     #[error("malformed keypair, failed to parse {0}")]
     MalformedKeyPair(#[from] rcgen::Error),
-    #[error("malformed certificate, failed to parse {0}")]
-    MalformedCertificate(#[from] x509_parser::asn1_rs::Err<x509_parser::error::X509Error>),
-    #[error("loading CA encounters an IO issue")]
-    IO(#[from] std::io::Error),
+    #[error("loading CA from database encounters an issue {0}")]
+    Database(#[from] sqlx::Error),
+}
+
+#[derive(Error, Debug)]
+pub enum InitializeError {
+    #[error(transparent)]
+    Generate(#[from] GenerateError),
+    #[error("failed to parse generated CA certificate {0}")]
+    InvalidCertificate(#[from] x509_parser::asn1_rs::Err<x509_parser::error::X509Error>),
+    #[error("failed to persist CA {0}")]
+    Database(#[from] sqlx::Error),
 }
 
 #[derive(Error, Debug)]
 pub enum GenerateError {
-    #[error("failed create ")]
-    SignCertificate(#[from] CreateError),
-    #[error("failed to generate keypair: {0}")]
-    GenerateKeyPair(#[from] rcgen::Error),
+    #[error("failed to generate or sign certificate authority {0}")]
+    Rcgen(#[from] rcgen::Error),
 }
 
 #[derive(Error, Debug)]
@@ -273,37 +362,13 @@ pub enum TrackedIssueError {
 
 #[cfg(test)]
 mod tests {
-    use std::os::unix::fs::PermissionsExt;
-
     use rustls_pki_types::{CertificateDer, UnixTime};
-    use temp_dir::TempDir;
     use time::{Duration, OffsetDateTime};
     use webpki::{
         ALL_VERIFICATION_ALGS, Cert, EndEntityCert, Error, KeyUsage, anchor_from_trusted_cert,
     };
 
-    use crate::pki::ca::{CertificateAuthority, CertificateIssuer, KEYPAIR_SUBPATH};
-
-    #[test]
-    fn test_save_load() {
-        let temp_dir = TempDir::new().expect("create temporary directory for testing");
-        let ca = CertificateAuthority::generate().unwrap();
-        ca.save(temp_dir.path()).unwrap();
-        let loaded = CertificateAuthority::load(temp_dir.path()).unwrap();
-        assert!(temp_dir.path().join(KEYPAIR_SUBPATH).is_file());
-        assert_eq!(
-            0o600,
-            temp_dir
-                .path()
-                .join(KEYPAIR_SUBPATH)
-                .metadata()
-                .unwrap()
-                .permissions()
-                .mode()
-                & 0o777
-        );
-        assert_eq!(ca, loaded);
-    }
+    use crate::pki::ca::{CertificateAuthority, CertificateIssuer};
 
     #[tokio::test]
     async fn test_issue() {
@@ -312,7 +377,7 @@ mod tests {
             .issue("testing subject", Duration::seconds(10))
             .await
             .unwrap();
-        let ca_der = CertificateDer::from_slice(&ca.certificate_der);
+        let ca_der = CertificateDer::from_slice(ca.certificate_der());
         let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
         let trust_anchors = [trust_anchor];
 
@@ -331,8 +396,10 @@ mod tests {
             .unwrap();
         assert!(verified_path.intermediate_certificates().next().is_none());
 
-        let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
+        let (_, ca_certificate) =
+            x509_parser::parse_x509_certificate(ca.certificate_der()).unwrap();
         let (_, x509) = x509_parser::parse_x509_certificate(issued.certificate.der()).unwrap();
+        assert!(ca_certificate.is_ca());
         assert!(!x509.is_ca());
         assert_eq!(&x509.issuer, ca_certificate.subject());
     }
@@ -347,7 +414,7 @@ mod tests {
                 OffsetDateTime::now_utc().saturating_sub(Duration::hours(1)),
             )
             .unwrap();
-        let ca_der = CertificateDer::from_slice(&ca.certificate_der);
+        let ca_der = CertificateDer::from_slice(ca.certificate_der());
         let trust_anchor = anchor_from_trusted_cert(&ca_der).unwrap();
         let trust_anchors = [trust_anchor];
 
@@ -373,7 +440,8 @@ mod tests {
             matches!(verify_error, Error::CertExpired { .. }),
             "{verify_error:?}"
         );
-        let (_, ca_certificate) = x509_parser::parse_x509_certificate(&ca.certificate_der).unwrap();
+        let (_, ca_certificate) =
+            x509_parser::parse_x509_certificate(ca.certificate_der()).unwrap();
         let (_, x509) = x509_parser::parse_x509_certificate(issued.certificate.der()).unwrap();
         assert!(!x509.is_ca());
         assert_eq!(&x509.issuer, ca_certificate.subject());
