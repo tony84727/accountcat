@@ -192,8 +192,8 @@ mod tests {
 
     #[test]
     fn test_inject_nonce() {
-        use crate::serve_dist::inject_nonce;
         use crate::csp::Nonce;
+        use crate::serve_dist::inject_nonce;
 
         let nonce = Nonce("test-nonce".to_string());
 
@@ -205,7 +205,9 @@ mod tests {
         // Test with placeholder text
         let source = b"<html><head><script nonce=\"__CSP_NONCE__\"></script></head><body>hello</body></html>".to_vec();
         let result = inject_nonce(&nonce, source);
-        let expected = b"<html><head><script nonce=\"test-nonce\"></script></head><body>hello</body></html>".to_vec();
+        let expected =
+            b"<html><head><script nonce=\"test-nonce\"></script></head><body>hello</body></html>"
+                .to_vec();
         assert_eq!(result, expected);
 
         // Test binary / invalid UTF-8
