@@ -1,5 +1,5 @@
 use accountcat::{
-    pki::ca::{CertificateAuthority, CertificateIssuer, TrackedCertificateIssuer},
+    pki::ca::{CertificateAuthority, CertificateIssuer, LoadError, TrackedCertificateIssuer},
     testing::{self, test_database::TestDatabase},
 };
 use sqlx::{PgPool, Row};
@@ -55,6 +55,68 @@ async fn test_initialize_allows_multiple_trusted_cas() {
         .await
         .unwrap();
     assert_eq!(2_i64, row.try_get::<i64, _>("count").unwrap());
+}
+
+#[tokio::test]
+async fn test_load_by_id_loads_requested_ca() {
+    let test_database = testing::create_database().await;
+    let TestDatabase { database } = &test_database;
+    let database_connection: PgPool = database.clone().into();
+    CertificateAuthority::initialize(&database_connection)
+        .await
+        .unwrap();
+    let expected_id = sqlx::query_scalar::<_, i32>(
+        "select id from certificates where is_ca and trusted order by created_at desc, id desc limit 1",
+    )
+    .fetch_one(&database_connection)
+    .await
+    .unwrap();
+
+    let ca = CertificateAuthority::load_by_id(&database_connection, expected_id)
+        .await
+        .unwrap();
+
+    assert_eq!(ca.issuer_certificate_id(), Some(expected_id));
+}
+
+#[tokio::test]
+async fn test_load_by_id_rejects_missing_issuer() {
+    let test_database = testing::create_database().await;
+    let TestDatabase { database } = &test_database;
+    let database_connection: PgPool = database.clone().into();
+
+    let err = CertificateAuthority::load_by_id(&database_connection, 999_999)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, LoadError::MissingIssuer(999_999)));
+}
+
+#[tokio::test]
+async fn test_load_by_id_rejects_non_issuable_certificate() {
+    let test_database = testing::create_database().await;
+    let TestDatabase { database } = &test_database;
+    let database_connection: PgPool = database.clone().into();
+    let certificate_id = sqlx::query_scalar::<_, i32>(
+        "insert into certificates (
+            serial,
+            not_before,
+            not_after,
+            is_ca,
+            trusted
+        ) values ($1, now(), now() + interval '1 day', false, false)
+        returning id",
+    )
+    .bind(1_i32)
+    .fetch_one(&database_connection)
+    .await
+    .unwrap();
+
+    let err = CertificateAuthority::load_by_id(&database_connection, certificate_id)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(err, LoadError::IssuerNotUsable(id) if id == certificate_id));
 }
 
 #[tokio::test]

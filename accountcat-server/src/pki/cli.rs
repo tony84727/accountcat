@@ -46,6 +46,7 @@ struct ListArgs {
 
 #[derive(FromRow)]
 struct ListedCertificate {
+    id: i32,
     serial: BigDecimal,
     country: Option<String>,
     state: Option<String>,
@@ -68,6 +69,7 @@ impl ListedCertificate {
     fn lines(&self, now: OffsetDateTime) -> Vec<String> {
         let (serial, _) = self.serial.clone().into_bigint_and_scale();
         vec![
+            format!("Id: {}", self.id),
             format!("{:X}", serial),
             format!(
                 "\tDN: C={},ST={},L={},O={},OU={},CN={}",
@@ -94,6 +96,7 @@ async fn list(config: &Config, args: &ListArgs) {
     let pool: PgPool = config.database.clone().into();
     let certificates = sqlx::query_as::<_, ListedCertificate>(
         "select
+            id,
             serial,
             country,
             state,
@@ -128,6 +131,9 @@ async fn list(config: &Config, args: &ListArgs) {
 
 #[derive(Parser)]
 struct IssueArgs {
+    /// Issuer certificate primary key from `pki list`
+    #[arg(long)]
+    issuer: i32,
     /// Entity name
     subject: String,
     /// Certificate validity duration in days
@@ -138,7 +144,9 @@ struct IssueArgs {
 impl IssueArgs {
     async fn run(&self, config: &Config) {
         let pool: PgPool = config.database.clone().into();
-        let ca = CertificateAuthority::load(&pool).await.unwrap();
+        let ca = CertificateAuthority::load_by_id(&pool, self.issuer)
+            .await
+            .unwrap();
         let ca = TrackedCertificateIssuer::new(config.database.clone().into(), ca);
         let ca_dir = &config.pki.ca;
         let certificates_dir = ca_dir.join("certificates");
@@ -203,6 +211,7 @@ mod tests {
         not_after: OffsetDateTime,
     ) -> ListedCertificate {
         ListedCertificate {
+            id: 12,
             serial: BigDecimal::from(255_i32),
             country: Some(String::from("TW")),
             state: Some(String::from("Taipei")),
@@ -225,6 +234,7 @@ mod tests {
 
         let lines = certificate.lines(now);
 
+        assert!(lines.iter().any(|line| line == "Id: 12"));
         assert!(lines.iter().any(|line| line == "\tCA: yes"));
         assert!(lines.iter().any(|line| line == "\tCanIssue: yes"));
     }
@@ -262,5 +272,19 @@ mod tests {
 
         assert!(lines.iter().any(|line| line == "\tCA: no"));
         assert!(lines.iter().any(|line| line == "\tCanIssue: no"));
+    }
+
+    #[test]
+    fn issue_requires_issuer_argument() {
+        let parsed = Command::try_parse_from(["accountcat", "issue", "testing"]);
+
+        assert!(parsed.is_err());
+    }
+
+    #[test]
+    fn issue_accepts_explicit_issuer_argument() {
+        let parsed = Command::try_parse_from(["accountcat", "issue", "--issuer", "12", "testing"]);
+
+        assert!(parsed.is_ok());
     }
 }

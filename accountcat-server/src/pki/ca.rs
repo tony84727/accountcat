@@ -100,14 +100,32 @@ impl CertificateAuthority {
         .fetch_optional(db)
         .await?
         .ok_or(LoadError::MissingTrustedCa)?;
+        Self::load_from_row(row)
+    }
+
+    pub async fn load_by_id(db: &PgPool, issuer_id: i32) -> Result<Self, LoadError> {
+        let row = sqlx::query(
+            "select
+                id,
+                trusted,
+                is_ca,
+                private_key_der,
+                der as certificate_der
+            from certificates
+            where id = $1",
+        )
+        .bind(issuer_id)
+        .fetch_optional(db)
+        .await?
+        .ok_or(LoadError::MissingIssuer(issuer_id))?;
+        let trusted = row.try_get::<bool, _>("trusted")?;
+        let is_ca = row.try_get::<bool, _>("is_ca")?;
         let certificate_der: Option<Vec<u8>> = row.try_get("certificate_der")?;
-        let certificate_der = certificate_der.ok_or(LoadError::MissingStoredCertificateDer)?;
-        let keypair = KeyPair::try_from(row.try_get::<Vec<u8>, _>("private_key_der")?)?;
-        Ok(Self {
-            id: Some(row.try_get("id")?),
-            keypair,
-            certificate_der,
-        })
+        let private_key_der: Option<Vec<u8>> = row.try_get("private_key_der")?;
+        if !trusted || !is_ca || certificate_der.is_none() || private_key_der.is_none() {
+            return Err(LoadError::IssuerNotUsable(issuer_id));
+        }
+        Self::load_from_parts(issuer_id, certificate_der, private_key_der)
     }
 
     pub fn certificate_der(&self) -> &[u8] {
@@ -130,6 +148,28 @@ impl CertificateAuthority {
         let cert_der = CertificateDer::from_slice(self.certificate_der.as_slice());
         Issuer::from_ca_cert_der(&cert_der, &self.keypair)
             .expect("stored CA certificate should remain valid")
+    }
+
+    fn load_from_row(row: sqlx::postgres::PgRow) -> Result<Self, LoadError> {
+        let id = row.try_get("id")?;
+        let certificate_der = row.try_get("certificate_der")?;
+        let private_key_der = row.try_get("private_key_der")?;
+        Self::load_from_parts(id, certificate_der, private_key_der)
+    }
+
+    fn load_from_parts(
+        id: i32,
+        certificate_der: Option<Vec<u8>>,
+        private_key_der: Option<Vec<u8>>,
+    ) -> Result<Self, LoadError> {
+        let certificate_der = certificate_der.ok_or(LoadError::MissingStoredCertificateDer)?;
+        let private_key_der = private_key_der.ok_or(LoadError::MissingStoredPrivateKey)?;
+        let keypair = KeyPair::try_from(private_key_der)?;
+        Ok(Self {
+            id: Some(id),
+            keypair,
+            certificate_der,
+        })
     }
 }
 
@@ -312,8 +352,16 @@ where
 pub enum LoadError {
     #[error("no trusted certificate authority found")]
     MissingTrustedCa,
+    #[error("issuer certificate #{0} not found")]
+    MissingIssuer(i32),
+    #[error(
+        "issuer certificate #{0} is not a trusted certificate authority with stored key material"
+    )]
+    IssuerNotUsable(i32),
     #[error("active certificate authority is missing certificate der")]
     MissingStoredCertificateDer,
+    #[error("active certificate authority is missing private key")]
+    MissingStoredPrivateKey,
     #[error("malformed keypair, failed to parse {0}")]
     MalformedKeyPair(#[from] rcgen::Error),
     #[error("loading CA from database encounters an issue {0}")]
