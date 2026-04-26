@@ -1,6 +1,6 @@
 use rcgen::{
-    Certificate, CertificateParams, DnType, ExtendedKeyUsagePurpose, Issuer, KeyPair,
-    KeyUsagePurpose, PKCS_ED25519, SigningKey,
+    Certificate, CertificateParams, CertificateSigningRequest, DnType, ExtendedKeyUsagePurpose,
+    IsCa, Issuer, KeyPair, KeyUsagePurpose, PKCS_ED25519, PublicKeyData, SigningKey,
 };
 use thiserror::Error;
 use time::OffsetDateTime;
@@ -18,6 +18,16 @@ impl ToBeSignedCertificate {
         not_before: OffsetDateTime,
         not_after: OffsetDateTime,
     ) -> Result<Self, CreateError> {
+        let key = KeyPair::generate_for(&PKCS_ED25519).map_err(CreateError::Keypair)?;
+        Ok(Self::create_with_key(subject, not_before, not_after, key))
+    }
+
+    pub fn create_with_key(
+        subject: &str,
+        not_before: OffsetDateTime,
+        not_after: OffsetDateTime,
+        key: KeyPair,
+    ) -> Self {
         let mut params = CertificateParams::default();
         params.distinguished_name.push(DnType::CountryName, "TW");
         params
@@ -33,22 +43,38 @@ impl ToBeSignedCertificate {
             .push(ExtendedKeyUsagePurpose::ClientAuth);
         params.not_before = not_before;
         params.not_after = not_after;
-        let key = KeyPair::generate_for(&PKCS_ED25519).map_err(CreateError::Keypair)?;
-        Ok(Self { key, params })
+        Self { key, params }
     }
 
     pub fn self_signed<S: SigningKey>(&self, key: S) -> Result<Certificate, rcgen::Error> {
         self.params.self_signed(&key)
     }
 
+    pub fn subject_key_id(&self) -> Vec<u8> {
+        self.params.key_identifier(&self.key)
+    }
+
+    pub fn serialize_request(&self) -> Result<CertificateSigningRequest, CreateError> {
+        self.params
+            .serialize_request(&self.key)
+            .map_err(CreateError::Serialize)
+    }
+
+    pub fn subject_public_key_info(&self) -> Vec<u8> {
+        self.key.subject_public_key_info()
+    }
+
     pub fn signed_by<S: SigningKey>(
         self,
         issuer: &Issuer<S>,
     ) -> Result<IssuedCertificate, rcgen::Error> {
-        let certificate = self.params.signed_by(&self.key, issuer)?;
+        let mut params = self.params.clone();
+        params.is_ca = IsCa::ExplicitNoCa;
+        params.use_authority_key_identifier_extension = true;
+        let certificate = params.signed_by(&self.key, issuer)?;
         Ok(IssuedCertificate {
             key: self.key,
-            params: self.params.clone(),
+            params,
             certificate,
         })
     }

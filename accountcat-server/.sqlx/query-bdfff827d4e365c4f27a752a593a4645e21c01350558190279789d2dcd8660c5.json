@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "update certificates set\n            serial = $1,\n            dn = $2,\n            country = $3,\n            state = $4,\n            locality = $5,\n            organization = $6,\n            organizational_unit = $7,\n            common_name = $8,\n            not_before = $9,\n            not_after = $10,\n            der = $11,\n            issuer_certificate_id = $12,\n            is_ca = $13,\n            trusted = $14,\n            subject_key_id = $15\n        where id = $16",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Numeric",
+        "Bytea",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Timestamptz",
+        "Timestamptz",
+        "Bytea",
+        "Int4",
+        "Bool",
+        "Bool",
+        "Bytea",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bdfff827d4e365c4f27a752a593a4645e21c01350558190279789d2dcd8660c5"
+}

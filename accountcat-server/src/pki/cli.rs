@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, process::exit};
+use std::{fs::File, io::Write, path::PathBuf, process::exit};
 
 use clap::{Args, Parser, Subcommand};
 use sqlx::{FromRow, PgPool, types::BigDecimal};
@@ -9,7 +9,7 @@ use crate::{
     config::Config,
     pki::ca::{
         CertificateAuthority, CertificateIssuer, TrackedCertificateIssuer,
-        create_option_for_sensitive_data,
+        create_option_for_sensitive_data, create_pending_csr, import_certificate,
     },
 };
 
@@ -27,6 +27,10 @@ enum Action {
     Init,
     /// Issue a certificate for entity
     Issue(IssueArgs),
+    /// Create a certificate signing request
+    Csr(CsrArgs),
+    /// Import a signed certificate
+    Import(ImportArgs),
 }
 
 async fn init(config: &Config) {
@@ -47,15 +51,15 @@ struct ListArgs {
 #[derive(FromRow)]
 struct ListedCertificate {
     id: i32,
-    serial: BigDecimal,
+    serial: Option<BigDecimal>,
     country: Option<String>,
     state: Option<String>,
     locality: Option<String>,
     organization: Option<String>,
     organizational_unit: Option<String>,
     common_name: Option<String>,
-    not_before: OffsetDateTime,
-    not_after: OffsetDateTime,
+    not_before: Option<OffsetDateTime>,
+    not_after: Option<OffsetDateTime>,
     is_ca: bool,
     trusted: bool,
     has_private_key: bool,
@@ -63,14 +67,24 @@ struct ListedCertificate {
 
 impl ListedCertificate {
     fn can_issue(&self, now: OffsetDateTime) -> bool {
-        self.is_ca && self.trusted && self.has_private_key && self.not_after > now
+        self.is_ca
+            && self.trusted
+            && self.has_private_key
+            && self.not_after.is_some_and(|x| x > now)
     }
 
     fn lines(&self, now: OffsetDateTime) -> Vec<String> {
-        let (serial, _) = self.serial.clone().into_bigint_and_scale();
+        let serial = self
+            .serial
+            .clone()
+            .map(|serial| {
+                let (serial, _) = serial.into_bigint_and_scale();
+                format!("{:X}", serial)
+            })
+            .unwrap_or_else(|| String::from("<pending>"));
         vec![
             format!("Id: {}", self.id),
-            format!("{:X}", serial),
+            serial,
             format!(
                 "\tDN: C={},ST={},L={},O={},OU={},CN={}",
                 self.country.clone().unwrap_or_default(),
@@ -82,8 +96,16 @@ impl ListedCertificate {
             ),
             format!("\tCA: {}", yes_no(self.is_ca)),
             format!("\tCanIssue: {}", yes_no(self.can_issue(now))),
-            format!("\tNotBefore: {}", self.not_before),
-            format!("\tNotAfter: {}", self.not_after),
+            format!(
+                "\tNotBefore: {}",
+                self.not_before
+                    .map_or(String::from("<pending>"), |x| x.to_string())
+            ),
+            format!(
+                "\tNotAfter: {}",
+                self.not_after
+                    .map_or(String::from("<pending>"), |x| x.to_string())
+            ),
         ]
     }
 }
@@ -127,6 +149,63 @@ async fn list(config: &Config, args: &ListArgs) {
             println!("{line}");
         }
     }
+}
+
+#[derive(Parser)]
+struct CsrArgs {
+    /// Entity name
+    subject: String,
+    /// Requested certificate validity duration in days
+    #[arg(default_value_t = 90)]
+    days: i64,
+}
+
+impl CsrArgs {
+    async fn run(&self, config: &Config) {
+        let pool: PgPool = config.database.clone().into();
+        let pending = create_pending_csr(&pool, &self.subject, Duration::days(self.days))
+            .await
+            .unwrap();
+        println!("{}", pending.request_pem);
+    }
+}
+
+#[derive(Parser)]
+struct ImportArgs {
+    /// PEM or DER certificate path
+    certificate: PathBuf,
+}
+
+impl ImportArgs {
+    async fn run(&self, config: &Config) {
+        let input = std::fs::read(&self.certificate).unwrap_or_else(|err| {
+            panic!(
+                "failed to read certificate {}: {err}",
+                self.certificate.to_string_lossy()
+            )
+        });
+        let certificate_der = certificate_der_from_input(&input);
+        let pool: PgPool = config.database.clone().into();
+        let imported = import_certificate(&pool, &certificate_der).await.unwrap();
+        if imported.idempotent {
+            println!("certificate #{} already imported", imported.id);
+        } else if imported.created {
+            println!(
+                "certificate #{} imported as new untrusted certificate",
+                imported.id
+            );
+        } else {
+            println!("certificate #{} imported", imported.id);
+        }
+    }
+}
+
+fn certificate_der_from_input(input: &[u8]) -> Vec<u8> {
+    if x509_parser::parse_x509_certificate(input).is_ok() {
+        return input.to_vec();
+    }
+    let (_, pem) = x509_parser::pem::parse_x509_pem(input).expect("failed to parse certificate");
+    pem.contents
 }
 
 #[derive(Parser)]
@@ -193,6 +272,8 @@ impl Command {
             Action::Init => init(config).await,
             Action::List(args) => list(config, args).await,
             Action::Issue(args) => args.run(config).await,
+            Action::Csr(args) => args.run(config).await,
+            Action::Import(args) => args.run(config).await,
         }
     }
 }
@@ -212,15 +293,15 @@ mod tests {
     ) -> ListedCertificate {
         ListedCertificate {
             id: 12,
-            serial: BigDecimal::from(255_i32),
+            serial: Some(BigDecimal::from(255_i32)),
             country: Some(String::from("TW")),
             state: Some(String::from("Taipei")),
             locality: Some(String::from("Taipei")),
             organization: Some(String::from("Accountcat")),
             organizational_unit: Some(String::from("PKI")),
             common_name: Some(String::from("testing")),
-            not_before: OffsetDateTime::UNIX_EPOCH,
-            not_after,
+            not_before: Some(OffsetDateTime::UNIX_EPOCH),
+            not_after: Some(not_after),
             is_ca,
             trusted,
             has_private_key,
@@ -284,6 +365,20 @@ mod tests {
     #[test]
     fn issue_accepts_explicit_issuer_argument() {
         let parsed = Command::try_parse_from(["accountcat", "issue", "--issuer", "12", "testing"]);
+
+        assert!(parsed.is_ok());
+    }
+
+    #[test]
+    fn csr_accepts_subject_and_optional_days() {
+        let parsed = Command::try_parse_from(["accountcat", "csr", "testing", "30"]);
+
+        assert!(parsed.is_ok());
+    }
+
+    #[test]
+    fn import_accepts_certificate_path() {
+        let parsed = Command::try_parse_from(["accountcat", "import", "certificate.pem"]);
 
         assert!(parsed.is_ok());
     }

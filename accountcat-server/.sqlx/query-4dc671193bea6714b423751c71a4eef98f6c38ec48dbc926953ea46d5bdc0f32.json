@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "select id, der, private_key_der, trusted\n        from certificates\n        where subject_key_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "der",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 2,
+        "name": "private_key_der",
+        "type_info": "Bytea"
+      },
+      {
+        "ordinal": 3,
+        "name": "trusted",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "4dc671193bea6714b423751c71a4eef98f6c38ec48dbc926953ea46d5bdc0f32"
+}

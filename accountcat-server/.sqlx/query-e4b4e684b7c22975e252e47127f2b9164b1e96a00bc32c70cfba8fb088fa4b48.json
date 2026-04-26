@@ -1,0 +1,37 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "insert into certificates (\n            serial,\n            dn,\n            country,\n            state,\n            locality,\n            organization,\n            organizational_unit,\n            common_name,\n            not_before,\n            not_after,\n            der,\n            private_key_der,\n            issuer_certificate_id,\n            is_ca,\n            trusted,\n            subject_key_id\n        ) values (\n            $1,\n            $2,\n            $3,\n            $4,\n            $5,\n            $6,\n            $7,\n            $8,\n            $9,\n            $10,\n            $11,\n            $12,\n            $13,\n            $14,\n            $15,\n            $16\n        )\n        returning id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Numeric",
+        "Bytea",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Timestamptz",
+        "Timestamptz",
+        "Bytea",
+        "Bytea",
+        "Int4",
+        "Bool",
+        "Bool",
+        "Bytea"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e4b4e684b7c22975e252e47127f2b9164b1e96a00bc32c70cfba8fb088fa4b48"
+}

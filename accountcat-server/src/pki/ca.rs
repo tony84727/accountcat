@@ -2,14 +2,20 @@ use std::{fs::OpenOptions, os::unix::fs::OpenOptionsExt};
 
 use rcgen::{
     BasicConstraints, CertificateParams, DnType, IsCa, Issuer, KeyPair, KeyUsagePurpose,
-    PKCS_ED25519,
+    PKCS_ED25519, PublicKeyData,
 };
 use rustls_pki_types::CertificateDer;
 use sqlx::{Executor, PgPool, Postgres, Row, types::BigDecimal};
 use thiserror::Error;
 use time::{Duration, OffsetDateTime};
 use tonic::async_trait;
-use x509_parser::x509::AttributeTypeAndValue;
+use x509_parser::{
+    certificate::X509Certificate,
+    certification_request::X509CertificationRequest,
+    extensions::ParsedExtension,
+    prelude::FromDer,
+    x509::{AttributeTypeAndValue, X509Name},
+};
 
 use crate::pki::{
     crt::IssuedCertificate,
@@ -144,6 +150,11 @@ impl CertificateAuthority {
         Ok(certificate)
     }
 
+    pub fn sign(&self, tbs: ToBeSignedCertificate) -> Result<IssuedCertificate, rcgen::Error> {
+        let issuer = self.get_issuer();
+        tbs.signed_by(&issuer)
+    }
+
     fn get_issuer(&self) -> Issuer<'static, &KeyPair> {
         let cert_der = CertificateDer::from_slice(self.certificate_der.as_slice());
         Issuer::from_ca_cert_der(&cert_der, &self.keypair)
@@ -239,8 +250,129 @@ impl<I: CertificateIssuer + Send + Sync> CertificateIssuer<TrackedIssueError>
     }
 }
 
+pub struct PendingCertificateSigningRequest {
+    pub id: i32,
+    pub request_pem: String,
+    pub request_der: Vec<u8>,
+    pub private_key_der: Vec<u8>,
+    pub subject_key_id: Vec<u8>,
+}
+
+pub async fn create_pending_csr(
+    db: &PgPool,
+    subject: &str,
+    duration: Duration,
+) -> Result<PendingCertificateSigningRequest, PendingCsrError> {
+    let not_before = OffsetDateTime::now_utc();
+    let not_after = not_before
+        .checked_add(duration)
+        .ok_or(PendingCsrError::InvalidNotAfter)?;
+    let tbs = ToBeSignedCertificate::create(subject, not_before, not_after)?;
+    let csr = tbs.serialize_request()?;
+    let request_der = csr.der().as_ref().to_vec();
+    let request_pem = csr.pem()?;
+    let (_, parsed) =
+        X509CertificationRequest::from_der(&request_der).map_err(PendingCsrError::InvalidCsr)?;
+    let metadata = CertificateMetadata::parse_subject(&parsed.certification_request_info.subject);
+    let subject_key_id = tbs.subject_key_id();
+    let private_key_der = tbs.key.serialized_der().to_vec();
+    let id = insert_pending_certificate(
+        db,
+        &metadata,
+        &subject_key_id,
+        Some(private_key_der.as_slice()),
+    )
+    .await?;
+    Ok(PendingCertificateSigningRequest {
+        id,
+        request_pem,
+        request_der,
+        private_key_der,
+        subject_key_id,
+    })
+}
+
+#[derive(Debug)]
+pub struct ImportedCertificate {
+    pub id: i32,
+    pub created: bool,
+    pub idempotent: bool,
+}
+
+pub async fn import_certificate(
+    db: &PgPool,
+    certificate_der: &[u8],
+) -> Result<ImportedCertificate, ImportCertificateError> {
+    let metadata = CertificateMetadata::parse(certificate_der)?;
+    let subject_key_id = metadata
+        .subject_key_id
+        .as_deref()
+        .ok_or(ImportCertificateError::MissingSubjectKeyIdentifier)?;
+    let issuer_certificate_id = match &metadata.authority_key_id {
+        Some(authority_key_id) => find_certificate_by_subject_key_id(db, authority_key_id).await?,
+        None => None,
+    };
+
+    if let Some(row) = sqlx::query!(
+        "select id, der, private_key_der, trusted
+        from certificates
+        where subject_key_id = $1",
+        subject_key_id,
+    )
+    .fetch_optional(db)
+    .await?
+    {
+        let id = row.id;
+        let existing_der = row.der;
+        if existing_der.as_deref() == Some(certificate_der) {
+            return Ok(ImportedCertificate {
+                id,
+                created: false,
+                idempotent: true,
+            });
+        }
+        if existing_der.is_some() {
+            return Err(ImportCertificateError::CertificateAlreadyImported(id));
+        }
+        if let Some(private_key_der) = row.private_key_der {
+            verify_certificate_matches_private_key(certificate_der, &private_key_der)?;
+        }
+        update_certificate(
+            db,
+            id,
+            &metadata,
+            metadata.is_ca,
+            row.trusted,
+            issuer_certificate_id,
+            certificate_der,
+        )
+        .await?;
+        return Ok(ImportedCertificate {
+            id,
+            created: false,
+            idempotent: false,
+        });
+    }
+
+    let id = insert_certificate(
+        db,
+        &metadata,
+        metadata.is_ca,
+        false,
+        issuer_certificate_id,
+        certificate_der,
+        None,
+    )
+    .await?;
+    Ok(ImportedCertificate {
+        id,
+        created: true,
+        idempotent: false,
+    })
+}
+
 struct CertificateMetadata {
-    serial: BigDecimal,
+    serial: Option<BigDecimal>,
     dn: Vec<u8>,
     country: Option<String>,
     state: Option<String>,
@@ -248,8 +380,11 @@ struct CertificateMetadata {
     organization: Option<String>,
     organizational_unit: Option<String>,
     common_name: Option<String>,
-    not_before: OffsetDateTime,
-    not_after: OffsetDateTime,
+    not_before: Option<OffsetDateTime>,
+    not_after: Option<OffsetDateTime>,
+    subject_key_id: Option<Vec<u8>>,
+    authority_key_id: Option<Vec<u8>>,
+    is_ca: bool,
 }
 
 impl CertificateMetadata {
@@ -257,10 +392,19 @@ impl CertificateMetadata {
         certificate_der: &[u8],
     ) -> Result<Self, x509_parser::asn1_rs::Err<x509_parser::error::X509Error>> {
         let (_, parsed) = x509_parser::parse_x509_certificate(certificate_der)?;
-        let serial = BigDecimal::from_biguint(parsed.serial.clone(), 0);
-        let dn = parsed.subject();
-        Ok(Self {
-            serial,
+        let mut metadata = Self::parse_subject(parsed.subject());
+        metadata.serial = Some(BigDecimal::from_biguint(parsed.serial.clone(), 0));
+        metadata.not_before = Some(parsed.validity().not_before.to_datetime());
+        metadata.not_after = Some(parsed.validity().not_after.to_datetime());
+        metadata.subject_key_id = subject_key_id(&parsed);
+        metadata.authority_key_id = authority_key_id(&parsed);
+        metadata.is_ca = parsed.is_ca();
+        Ok(metadata)
+    }
+
+    fn parse_subject(dn: &X509Name<'_>) -> Self {
+        Self {
+            serial: None,
             dn: dn.as_raw().to_vec(),
             country: optional_rdn(dn.iter_country()),
             state: optional_rdn(dn.iter_state_or_province()),
@@ -268,10 +412,34 @@ impl CertificateMetadata {
             organization: optional_rdn(dn.iter_organization()),
             organizational_unit: optional_rdn(dn.iter_organizational_unit()),
             common_name: optional_rdn(dn.iter_common_name()),
-            not_before: parsed.validity().not_before.to_datetime(),
-            not_after: parsed.validity().not_after.to_datetime(),
-        })
+            not_before: None,
+            not_after: None,
+            subject_key_id: None,
+            authority_key_id: None,
+            is_ca: false,
+        }
     }
+}
+
+fn subject_key_id(certificate: &X509Certificate<'_>) -> Option<Vec<u8>> {
+    certificate
+        .iter_extensions()
+        .find_map(|extension| match extension.parsed_extension() {
+            ParsedExtension::SubjectKeyIdentifier(key_id) => Some(key_id.0.to_vec()),
+            _ => None,
+        })
+}
+
+fn authority_key_id(certificate: &X509Certificate<'_>) -> Option<Vec<u8>> {
+    certificate
+        .iter_extensions()
+        .find_map(|extension| match extension.parsed_extension() {
+            ParsedExtension::AuthorityKeyIdentifier(key_id) => key_id
+                .key_identifier
+                .as_ref()
+                .map(|key_id| key_id.0.to_vec()),
+            _ => None,
+        })
 }
 
 fn optional_rdn<'n, I: Iterator<Item = &'n AttributeTypeAndValue<'n>>>(
@@ -292,7 +460,7 @@ async fn insert_certificate<'e, E>(
 where
     E: Executor<'e, Database = Postgres>,
 {
-    let row = sqlx::query(
+    let row = sqlx::query!(
         "insert into certificates (
             serial,
             dn,
@@ -308,7 +476,8 @@ where
             private_key_der,
             issuer_certificate_id,
             is_ca,
-            trusted
+            trusted,
+            subject_key_id
         ) values (
             $1,
             $2,
@@ -324,28 +493,166 @@ where
             $12,
             $13,
             $14,
-            $15
+            $15,
+            $16
         )
         returning id",
+        metadata.serial.as_ref(),
+        &metadata.dn,
+        metadata.country.as_deref(),
+        metadata.state.as_deref(),
+        metadata.locality.as_deref(),
+        metadata.organization.as_deref(),
+        metadata.organizational_unit.as_deref(),
+        metadata.common_name.as_deref(),
+        metadata.not_before,
+        metadata.not_after,
+        der,
+        private_key_der,
+        issuer_certificate_id,
+        is_ca,
+        trusted,
+        metadata.subject_key_id.as_deref(),
     )
-    .bind(&metadata.serial)
-    .bind(&metadata.dn)
-    .bind(&metadata.country)
-    .bind(&metadata.state)
-    .bind(&metadata.locality)
-    .bind(&metadata.organization)
-    .bind(&metadata.organizational_unit)
-    .bind(&metadata.common_name)
-    .bind(metadata.not_before)
-    .bind(metadata.not_after)
-    .bind(der)
-    .bind(private_key_der)
-    .bind(issuer_certificate_id)
-    .bind(is_ca)
-    .bind(trusted)
     .fetch_one(executor)
     .await?;
-    row.try_get("id")
+    Ok(row.id)
+}
+
+async fn insert_pending_certificate<'e, E>(
+    executor: E,
+    metadata: &CertificateMetadata,
+    subject_key_id: &[u8],
+    private_key_der: Option<&[u8]>,
+) -> Result<i32, sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    let row = sqlx::query!(
+        "insert into certificates (
+            serial,
+            dn,
+            country,
+            state,
+            locality,
+            organization,
+            organizational_unit,
+            common_name,
+            not_before,
+            not_after,
+            der,
+            private_key_der,
+            issuer_certificate_id,
+            is_ca,
+            trusted,
+            subject_key_id
+        ) values (
+            null,
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7,
+            null,
+            null,
+            null,
+            $8,
+            null,
+            false,
+            true,
+            $9
+        )
+        returning id",
+        &metadata.dn,
+        metadata.country.as_deref(),
+        metadata.state.as_deref(),
+        metadata.locality.as_deref(),
+        metadata.organization.as_deref(),
+        metadata.organizational_unit.as_deref(),
+        metadata.common_name.as_deref(),
+        private_key_der,
+        subject_key_id,
+    )
+    .fetch_one(executor)
+    .await?;
+    Ok(row.id)
+}
+
+async fn update_certificate(
+    db: &PgPool,
+    id: i32,
+    metadata: &CertificateMetadata,
+    is_ca: bool,
+    trusted: bool,
+    issuer_certificate_id: Option<i32>,
+    der: &[u8],
+) -> Result<(), sqlx::Error> {
+    sqlx::query!(
+        "update certificates set
+            serial = $1,
+            dn = $2,
+            country = $3,
+            state = $4,
+            locality = $5,
+            organization = $6,
+            organizational_unit = $7,
+            common_name = $8,
+            not_before = $9,
+            not_after = $10,
+            der = $11,
+            issuer_certificate_id = $12,
+            is_ca = $13,
+            trusted = $14,
+            subject_key_id = $15
+        where id = $16",
+        metadata.serial.as_ref(),
+        &metadata.dn,
+        metadata.country.as_deref(),
+        metadata.state.as_deref(),
+        metadata.locality.as_deref(),
+        metadata.organization.as_deref(),
+        metadata.organizational_unit.as_deref(),
+        metadata.common_name.as_deref(),
+        metadata.not_before,
+        metadata.not_after,
+        der,
+        issuer_certificate_id,
+        is_ca,
+        trusted,
+        metadata.subject_key_id.as_deref(),
+        id,
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+async fn find_certificate_by_subject_key_id(
+    db: &PgPool,
+    subject_key_id: &[u8],
+) -> Result<Option<i32>, sqlx::Error> {
+    let row = sqlx::query!(
+        "select id from certificates where subject_key_id = $1",
+        subject_key_id,
+    )
+    .fetch_optional(db)
+    .await?;
+    Ok(row.map(|row| row.id))
+}
+
+fn verify_certificate_matches_private_key(
+    certificate_der: &[u8],
+    private_key_der: &[u8],
+) -> Result<(), ImportCertificateError> {
+    let (_, parsed) = x509_parser::parse_x509_certificate(certificate_der)?;
+    let keypair = KeyPair::try_from(private_key_der.to_vec())?;
+    if parsed.public_key().raw == keypair.subject_public_key_info().as_slice() {
+        Ok(())
+    } else {
+        Err(ImportCertificateError::PublicKeyMismatch)
+    }
 }
 
 #[derive(Error, Debug)]
@@ -406,6 +713,36 @@ pub enum TrackedIssueError {
     MissingSubjectUid,
     #[error("issued certificate doesn't have a issuer identifier")]
     MissingIssuerUid,
+}
+
+#[derive(Error, Debug)]
+pub enum PendingCsrError {
+    #[error("specified date isn't valid or overflowed")]
+    InvalidNotAfter,
+    #[error("failed to create CSR {0}")]
+    Create(#[from] CreateError),
+    #[error("failed to serialize CSR {0}")]
+    Serialize(#[from] rcgen::Error),
+    #[error("generated CSR is invalid {0}")]
+    InvalidCsr(x509_parser::asn1_rs::Err<x509_parser::error::X509Error>),
+    #[error("failed to persist pending CSR {0}")]
+    Database(#[from] sqlx::Error),
+}
+
+#[derive(Error, Debug)]
+pub enum ImportCertificateError {
+    #[error("invalid certificate {0}")]
+    InvalidCertificate(#[from] x509_parser::asn1_rs::Err<x509_parser::error::X509Error>),
+    #[error("imported certificate doesn't have a subject key identifier")]
+    MissingSubjectKeyIdentifier,
+    #[error("certificate #{0} already has different certificate DER")]
+    CertificateAlreadyImported(i32),
+    #[error("certificate public key doesn't match stored private key")]
+    PublicKeyMismatch,
+    #[error("stored private key is malformed {0}")]
+    MalformedPrivateKey(#[from] rcgen::Error),
+    #[error("failed to import certificate {0}")]
+    Database(#[from] sqlx::Error),
 }
 
 #[cfg(test)]
